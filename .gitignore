@@ -1,0 +1,15 @@
+.venv/
+.idea/
+__pycache__/
+*.pyc
+.claude/settings.local.json
+
+# MediaPipe model files (auto-downloaded on first run)
+*.task
+
+# Generated artifacts and longitudinal data
+*_skeleton.mp4
+*_landmarks.csv
+*_metrics.json
+*_quality.json
+data/

@@ -1,0 +1,13 @@
+# Runtime dependencies. No paid inference APIs — cost per use stays zero.
+mediapipe>=0.10.30      # Tasks API (PoseLandmarker); mp.solutions is removed
+opencv-python
+numpy
+pandas
+scipy
+
+# The LLM layer talks to a local Ollama server over plain HTTP (stdlib
+# urllib), so no Python package is needed for it. Install Ollama
+# separately (https://ollama.com) and pull an 8B-class instruct model,
+# e.g.:  ollama pull llama3.1:8b
+
+# Tests use stdlib unittest:  python -m unittest discover -s tests -t .
