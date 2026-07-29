@@ -155,6 +155,11 @@ def running_direction(df):
 # noise on a near-stationary subject, not gait.
 MIN_SWING_RATIO = 0.15
 
+# Ceiling on COMBINED left+right cadence — faster than any real runner.
+# Used to derive the minimum spacing between two strikes of the SAME foot
+# (see detect_events): a single foot's own strike rate is roughly half this.
+MAX_COMBINED_CADENCE_SPM = 240
+
 
 def detect_events(df, side, direction, fps, leg_len):
     """Find foot strike and toe-off frames for one foot.
@@ -182,10 +187,12 @@ def detect_events(df, side, direction, fps, leg_len):
     if leg_len <= 0 or swing < MIN_SWING_RATIO * leg_len:
         return np.array([], dtype=int), np.array([], dtype=int)
 
-    # Minimum spacing between successive strikes of the SAME foot.
-    # A stride rate above ~240 steps/min is not physically plausible, so
-    # this rejects double-detections from residual noise.
-    min_gap = max(int(fps * 60 / 240), 2)
+    # Minimum spacing between successive strikes of the SAME foot. 240
+    # spm is a ceiling on COMBINED left+right cadence; a single foot's own
+    # strike rate is roughly half that. Applying 240 directly to one
+    # side's detector (as this used to) let tracking jitter within a
+    # single stride masquerade as a second strike on real footage.
+    min_gap = max(int(fps * 60 / (MAX_COMBINED_CADENCE_SPM / 2)), 2)
     amplitude = np.nanstd(filled)
 
     strikes, _ = find_peaks(filled, distance=min_gap, prominence=amplitude * 0.3)
