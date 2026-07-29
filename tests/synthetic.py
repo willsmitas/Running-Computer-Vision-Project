@@ -27,6 +27,8 @@ def make_gait_frames(
     direction=1,         # +1 faces screen-right, -1 screen-left
     noise=0.0,
     stationary=False,
+    occlude=None,        # (side, start_frame, end_frame): drop that leg's
+                         # visibility, as the far leg really does mid-clip
     seed=0,
 ):
     """Kinematically simple runner: sinusoidal ankle swing about the hip,
@@ -73,6 +75,20 @@ def make_gait_frames(
         put(f"{side}_foot_index", ankle_x + 0.03 * direction, np.full(n, 0.95))
 
     df = pd.DataFrame(cols)
+
+    # Simulated occlusion: on real footage the leg farther from the camera
+    # periodically drops below the visibility threshold, metrics.py masks
+    # those samples to NaN, and gait events in that window go undetected.
+    # That is what makes a strike pair with a toe-off from a LATER stride
+    # unless the pairing is bounded.
+    if occlude:
+        side, start, end = occlude
+        for joint in (f"{side}_ankle", f"{side}_knee", f"{side}_heel",
+                      f"{side}_foot_index"):
+            col = f"{joint}_vis"
+            if col in df.columns:
+                df.loc[start:end, col] = 0.2  # below metrics.VIS_THRESHOLD
+
     missing = [j for j in REQUIRED if f"{j}_x" not in df.columns]
     assert not missing, f"synthetic generator missing joints: {missing}"
     return df

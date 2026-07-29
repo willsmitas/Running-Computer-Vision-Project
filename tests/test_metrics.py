@@ -71,6 +71,60 @@ class TestMetricsRecovery(unittest.TestCase):
                 for key in ("mean", "sd", "n"):
                     self.assertIn(key, s)  # never a bare mean (CLAUDE.md)
 
+    def test_cadence_resolves_between_whole_frame_intervals(self):
+        """Cadence must resolve finer than the whole-frame ladder.
+
+        A median of integer frame intervals can only land on 60*fps/k, so
+        at 30 fps it jumps ~180.0 -> 171.4 -> 163.6, steps of 8-10 spm.
+        Phase 0 has to hit +-3 spm, so any true cadence between two rungs
+        has to be recovered by averaging, not by the median alone.
+        """
+        for target in (173.0, 168.0, 186.0):
+            m = _run(self.tmpdir, f"cad{target}.csv",
+                     cadence_spm=target, seconds=14.0)
+            self.assertAlmostEqual(
+                m["cadence_spm"], target, delta=3.0,
+                msg=f"cadence {target} not resolved off the whole-frame ladder",
+            )
+
+    def test_contact_time_never_spans_a_stride(self):
+        """A dropped toe-off must not pair its strike with a later stride.
+
+        Occluding one leg across a toe-off leaves the surrounding strikes
+        intact, so an unbounded "next toe-off" search jumps a whole stride
+        and reports ~967 ms of ground contact -- physically impossible and
+        far outside any reference range. Nothing should be emitted for
+        that stride instead.
+        """
+        m = _run(self.tmpdir, "occluded.csv", cadence_spm=180.0, seconds=12.0,
+                 occlude=("left", 26, 46))
+        # Same-foot stride period at 180 spm = 667 ms; contact is a
+        # fraction of it. Allow the full stride as a generous ceiling.
+        stride_ms = 60_000.0 / (180.0 / 2)
+        gc = m["per_side"]["left"]["ground_contact_ms"]
+        self.assertIsNotNone(gc)
+        self.assertLess(
+            gc["mean"], stride_ms,
+            "contact time exceeds a full stride -- pairing spanned strides",
+        )
+
+    def test_trunk_lean_sign_holds_facing_either_way(self):
+        """Forward lean must read positive regardless of facing.
+
+        Every real clip so far is direction="right", so the screen-left
+        path is otherwise unexercised -- and a sign error there would
+        silently invert lean for half of all future footage.
+        """
+        for name, direction in (("lean_r.csv", 1), ("lean_l.csv", -1)):
+            m = _run(self.tmpdir, name, direction=direction)
+            for side in ("left", "right"):
+                lean = m["per_side"][side]["trunk_lean_deg"]
+                self.assertIsNotNone(lean)
+                self.assertGreater(
+                    lean["mean"], 0.0,
+                    f"direction={direction} {side}: forward lean read as negative",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,14 +34,47 @@ KEY_JOINTS = (
     "left_ankle", "right_ankle",
 )
 
+# Running alternates feet, so left and right strike counts can differ by
+# at most one -- the clip simply starts and ends mid-stride. This bound is
+# physical, NOT proportional: a 60 s clip is no more entitled to a wide
+# gap than a 15 s one, so there is deliberately no percentage term here.
+# Allow 2 rather than 1 to absorb a single missed event at a clip edge.
+# A wider gap means one leg's events are being dropped -- the failure that
+# showed up as 25/31 on real footage before the per-foot spacing fix.
+STRIKE_IMBALANCE_ABS = 2
+
 
 def _key_joint_visibility(csv_path):
+    """Per-joint, per-side visibility of the gait-critical joints.
+
+    Two levels of averaging had to go, because each one hid a real
+    tracking failure on actual footage:
+      - across sides: the near leg tracks at ~0.9 and masks a far leg at
+        ~0.45, yet every per-side and asymmetry metric needs both legs.
+      - across joints within a side: the hip sits at ~1.0 in every clip
+        (it is the body centre and essentially never occluded), which
+        dragged a 0.39 knee up to a 0.62 side average and over threshold.
+    So gate on the WORST joint. Returns per-side dicts of joint -> mean
+    visibility plus that side's "min", and a top-level "min" overall.
+    """
     df = pd.read_csv(csv_path)
-    cols = [f"{j}_vis" for j in KEY_JOINTS if f"{j}_vis" in df.columns]
-    if not cols:
-        return None
-    val = df[cols].mean().mean()
-    return None if pd.isna(val) else round(float(val), 3)
+    out = {}
+    for side in ("left", "right"):
+        joints = {}
+        for j in KEY_JOINTS:
+            if not j.startswith(side):
+                continue
+            col = f"{j}_vis"
+            if col not in df.columns:
+                continue
+            val = df[col].mean()
+            if not pd.isna(val):
+                joints[j[len(side) + 1:]] = round(float(val), 3)
+        joints["min"] = min(joints.values()) if joints else None
+        out[side] = joints
+    mins = [out[s].get("min") for s in ("left", "right") if out[s].get("min") is not None]
+    out["min"] = min(mins) if mins else None
+    return out
 
 
 def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9, frame_mode="image"):
@@ -73,7 +106,9 @@ def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9, frame
     if ex.detection_rate < MIN_DETECTION_RATE:
         quality_flags.append("low_detection_rate")
     key_vis = _key_joint_visibility(ex.landmarks_csv_path)
-    if key_vis is not None and key_vis < MIN_KEY_JOINT_VISIBILITY:
+    # Gate on the WORSE side, not the average: one unusable leg is enough
+    # to invalidate every per-side and asymmetry metric.
+    if key_vis["min"] is not None and key_vis["min"] < MIN_KEY_JOINT_VISIBILITY:
         quality_flags.append("low_key_joint_visibility")
     if duration_s < MIN_CLIP_SECONDS:
         quality_flags.append("short_clip")
@@ -84,6 +119,12 @@ def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9, frame
     )
     if (metrics.get("steps_detected") or 0) < MIN_STRIKES:
         quality_flags.append("few_strikes")
+
+    per_side = metrics.get("per_side") or {}
+    n_left = (per_side.get("left") or {}).get("strikes_detected") or 0
+    n_right = (per_side.get("right") or {}).get("strikes_detected") or 0
+    if abs(n_left - n_right) > STRIKE_IMBALANCE_ABS:
+        quality_flags.append("strike_count_imbalance")
 
     stem = os.path.splitext(ex.landmarks_csv_path)[0]
     stem = stem[: -len("_landmarks")] if stem.endswith("_landmarks") else stem
