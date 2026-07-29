@@ -43,8 +43,15 @@ def cmd_analyze(args):
     )
     print(f"Frames:            {result['frames']} ({result['duration_s']} s @ {result['fps']:.6g} fps)")
     print(f"Detection rate:    {result['detection_rate']:.1%}")
-    if result["key_joint_visibility"] is not None:
-        print(f"Key-joint vis:     {result['key_joint_visibility']:.2f}")
+    kv = result["key_joint_visibility"]
+    if kv and kv.get("min") is not None:
+        # Show the worst joint on each side: gating acts on it, and
+        # seeing the two side by side makes a one-legged tracking failure
+        # obvious in a way a single averaged number never did.
+        print(
+            f"Key-joint vis:     left {kv['left']['min']} (worst joint)  "
+            f"right {kv['right']['min']} (worst joint)"
+        )
     print(f"Steps detected:    {result['metrics'].get('steps_detected')}")
     print(f"Quality flags:     {result['quality_flags'] or 'none'}")
     print(f"Skeleton video:    {result['skeleton_video_path']}")

@@ -160,6 +160,19 @@ MIN_SWING_RATIO = 0.15
 # (see detect_events): a single foot's own strike rate is roughly half this.
 MAX_COMBINED_CADENCE_SPM = 240
 
+# Peak prominence for gait event detection, as a fraction of the ankle
+# signal's own SD. Scaling to the signal keeps it valid across filming
+# distances; too low admits jitter as strikes, too high drops real ones.
+# Interacts with the --smooth window (over-smoothing flattens peaks), so
+# tune the two together against real footage.
+PROMINENCE_SD_RATIO = 0.3
+
+# Intervals this far from the median step interval are a missed strike
+# (long) or a double detection (short), and are excluded before averaging
+# for cadence. Wide enough to keep genuine stride-to-stride variation.
+CADENCE_INTERVAL_MIN_RATIO = 0.5
+CADENCE_INTERVAL_MAX_RATIO = 1.5
+
 
 def detect_events(df, side, direction, fps, leg_len):
     """Find foot strike and toe-off frames for one foot.
@@ -195,8 +208,12 @@ def detect_events(df, side, direction, fps, leg_len):
     min_gap = max(int(fps * 60 / (MAX_COMBINED_CADENCE_SPM / 2)), 2)
     amplitude = np.nanstd(filled)
 
-    strikes, _ = find_peaks(filled, distance=min_gap, prominence=amplitude * 0.3)
-    toeoffs, _ = find_peaks(-filled, distance=min_gap, prominence=amplitude * 0.3)
+    strikes, _ = find_peaks(
+        filled, distance=min_gap, prominence=amplitude * PROMINENCE_SD_RATIO
+    )
+    toeoffs, _ = find_peaks(
+        -filled, distance=min_gap, prominence=amplitude * PROMINENCE_SD_RATIO
+    )
     return strikes, toeoffs
 
 
@@ -271,10 +288,22 @@ def analyze(df, fps, direction, leg_len):
 
     total_steps = len(all_strikes)
     if total_steps >= 3:
-        intervals = np.diff(all_strikes)
-        # Median resists a single missed strike (which would otherwise
-        # show up as one double-length interval and drag the mean).
-        step_period_frames = float(np.median(intervals))
+        intervals = np.diff(all_strikes).astype(float)
+        # Two-stage estimate. The median resists a missed strike (one
+        # double-length interval) or a double-detection (one half-length
+        # one), so it picks the outlier band -- but the median of
+        # whole-frame intervals is itself quantized to whole frames, and
+        # at 30 fps that lands cadence on a coarse ladder (~180.0, 171.4,
+        # 163.6 ...) roughly 8-10 spm apart near running cadence. Phase 0
+        # has to resolve 3 spm, so take the MEAN of the in-band
+        # intervals: averaging tens of them recovers sub-frame precision
+        # while keeping the median's outlier rejection.
+        med = float(np.median(intervals))
+        keep = intervals[
+            (intervals >= CADENCE_INTERVAL_MIN_RATIO * med)
+            & (intervals <= CADENCE_INTERVAL_MAX_RATIO * med)
+        ]
+        step_period_frames = float(np.mean(keep)) if len(keep) else med
         results["cadence_spm"] = (
             round(60.0 * fps / step_period_frames, 1) if step_period_frames > 0 else None
         )
@@ -293,7 +322,7 @@ def analyze(df, fps, direction, leg_len):
         knee_angles, overstrides, leans, contact_times = [], [], [], []
         hip_x, _ = midpoint(df, "hip")
 
-        for f in strikes:
+        for i, f in enumerate(strikes):
             # Knee flexion at foot strike. A very straight leg (angle near
             # 180) at contact is the classic overstriding signature.
             knee_angles.append(
@@ -309,10 +338,20 @@ def analyze(df, fps, direction, leg_len):
                     float((ankle_x - hip_x.iloc[f]) * direction / leg_len)
                 )
 
-            # Ground contact: this strike to the next toe-off after it.
-            later = toeoffs[toeoffs > f]
-            if len(later):
-                contact_times.append(float((later[0] - f) / fps * 1000))
+            # Ground contact: this strike to the next toe-off after it —
+            # but ONLY if that toe-off happens before this same foot
+            # strikes again. A foot cannot still be on the ground after
+            # its own next strike, so a toe-off past that point means the
+            # real one was dropped (low visibility at that moment) and
+            # the pairing has silently spanned whole strides. Emitting it
+            # anyway produced contact times up to 934 ms on real footage
+            # — physically impossible, and worse than emitting nothing.
+            # The last strike has no following strike to bound it, so it
+            # contributes no contact time.
+            if i + 1 < len(strikes):
+                window = toeoffs[(toeoffs > f) & (toeoffs < strikes[i + 1])]
+                if len(window):
+                    contact_times.append(float((window[0] - f) / fps * 1000))
 
         # Hip extension at toe-off: how far the leg drives back behind
         # the body. Limited extension often points to hip flexor tightness.
