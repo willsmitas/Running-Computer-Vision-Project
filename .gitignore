@@ -13,3 +13,6 @@ __pycache__/
 *_metrics.json
 *_quality.json
 data/
+
+# Raw source clips (large, personal footage — not build inputs)
+*.mov

@@ -39,6 +39,7 @@ def cmd_analyze(args):
     result = analyze_clip(
         args.video, out_dir=args.out_dir,
         model_variant=args.model_variant, smooth=args.smooth,
+        frame_mode=args.frame_mode,
     )
     print(f"Frames:            {result['frames']} ({result['duration_s']} s @ {result['fps']:.6g} fps)")
     print(f"Detection rate:    {result['detection_rate']:.1%}")
@@ -117,6 +118,7 @@ def build_parser():
     a.add_argument("video")
     a.add_argument("--out-dir", default=None)
     a.add_argument("--model-variant", default="lite", choices=("lite", "full", "heavy"))
+    a.add_argument("--frame-mode", default="image", choices=("video", "image"))
     a.add_argument("--smooth", type=int, default=9)
     a.set_defaults(func=cmd_analyze)
 

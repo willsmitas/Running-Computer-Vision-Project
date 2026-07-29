@@ -96,16 +96,70 @@ def reduce_landmarks(landmarks):
     return [head] + list(landmarks[NUM_FACE_LANDMARKS:])
 
 
+# BGR (OpenCV order). Left/right legs get the most visually distinct pair
+# (red vs. blue) since limb-crossover leg-swap is the top Phase 0 validation
+# risk (BUILD_PLAN.md) -- the overlay needs to make a swap obvious at a
+# glance. Arms echo the same warm-left/cool-right convention as a secondary
+# cue; torso/head bones are neutral green.
+COLOR_HEAD = (255, 255, 255)
+COLOR_TORSO = (0, 200, 0)
+COLOR_LEFT_ARM = (0, 140, 255)
+COLOR_RIGHT_ARM = (200, 0, 160)
+COLOR_LEFT_LEG = (0, 0, 255)
+COLOR_RIGHT_LEG = (255, 60, 0)
+
+_LEFT_LEG_JOINTS = {"left_knee", "left_ankle", "left_heel", "left_foot_index"}
+_RIGHT_LEG_JOINTS = {"right_knee", "right_ankle", "right_heel", "right_foot_index"}
+_LEFT_ARM_JOINTS = {"left_elbow", "left_wrist", "left_pinky", "left_index", "left_thumb"}
+_RIGHT_ARM_JOINTS = {"right_elbow", "right_wrist", "right_pinky", "right_index", "right_thumb"}
+
+# (start_idx, end_idx) pairs from POSE_CONNECTIONS, grouped by limb so each
+# bone segment can be colored independently of its (possibly torso-shared)
+# endpoint joints.
+_LEFT_LEG_CONN = {(13, 15), (15, 17), (17, 19), (17, 21), (19, 21)}
+_RIGHT_LEG_CONN = {(14, 16), (16, 18), (18, 20), (18, 22), (20, 22)}
+_LEFT_ARM_CONN = {(1, 3), (3, 5), (5, 7), (5, 9), (5, 11), (7, 9)}
+_RIGHT_ARM_CONN = {(2, 4), (4, 6), (6, 8), (6, 10), (6, 12), (8, 10)}
+
+
+def _joint_color(name):
+    if name in _LEFT_LEG_JOINTS:
+        return COLOR_LEFT_LEG
+    if name in _RIGHT_LEG_JOINTS:
+        return COLOR_RIGHT_LEG
+    if name in _LEFT_ARM_JOINTS:
+        return COLOR_LEFT_ARM
+    if name in _RIGHT_ARM_JOINTS:
+        return COLOR_RIGHT_ARM
+    if name == "head":
+        return COLOR_HEAD
+    return COLOR_TORSO  # shoulders, hips
+
+
+def _connection_color(start_idx, end_idx):
+    pair = (start_idx, end_idx)
+    if pair in _LEFT_LEG_CONN:
+        return COLOR_LEFT_LEG
+    if pair in _RIGHT_LEG_CONN:
+        return COLOR_RIGHT_LEG
+    if pair in _LEFT_ARM_CONN:
+        return COLOR_LEFT_ARM
+    if pair in _RIGHT_ARM_CONN:
+        return COLOR_RIGHT_ARM
+    return COLOR_TORSO
+
+
 def draw_landmarks(frame, landmarks, width, height):
     points = []
-    for lm in landmarks:
+    for name, lm in zip(LANDMARK_NAMES, landmarks):
         x, y = int(lm.x * width), int(lm.y * height)
         points.append((x, y))
-        cv2.circle(frame, (x, y), 4, (0, 255, 0), -1)
+        cv2.circle(frame, (x, y), 4, _joint_color(name), -1)
 
     for start_idx, end_idx in POSE_CONNECTIONS:
         if start_idx < len(points) and end_idx < len(points):
-            cv2.line(frame, points[start_idx], points[end_idx], (255, 255, 255), 2)
+            color = _connection_color(start_idx, end_idx)
+            cv2.line(frame, points[start_idx], points[end_idx], color, 2)
 
 
 @dataclass
@@ -133,10 +187,24 @@ def extract_pose(
     out_dir: str | None = None,
     model_variant: str = "lite",
     progress_every: int = 100,
+    frame_mode: str = "image",
 ) -> PoseExtraction:
     """Run pose estimation over a video. Writes the skeleton overlay video
     and the landmarks CSV next to the input (or into out_dir) and returns
-    a PoseExtraction. Raises VideoError on unreadable/empty input."""
+    a PoseExtraction. Raises VideoError on unreadable/empty input.
+
+    frame_mode="image" (default) detects every frame independently with
+    no memory between frames. Slower than "video" mode, but validated
+    against real treadmill footage to noticeably reduce left/right strike
+    imbalance (BUILD_PLAN.md Phase 0) -- "video" mode's ROI tracking can
+    carry a bad lock on one leg forward across many frames, and per-frame
+    detection doesn't have that failure mode.
+    frame_mode="video" uses MediaPipe's VIDEO running mode, which tracks
+    each frame's ROI from the previous frame's detection: smoother and
+    faster, but susceptible to the carry-over problem above.
+    """
+    if frame_mode not in ("video", "image"):
+        raise ValueError(f"Unknown frame_mode '{frame_mode}'. Options: video, image")
     model = ensure_model(model_variant)
 
     cap = cv2.VideoCapture(input_path)
@@ -165,7 +233,7 @@ def extract_pose(
 
     options = PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model),
-        running_mode=RunningMode.VIDEO,
+        running_mode=RunningMode.VIDEO if frame_mode == "video" else RunningMode.IMAGE,
         num_poses=1,
         min_pose_detection_confidence=0.5,
         min_tracking_confidence=0.5,
@@ -186,9 +254,11 @@ def extract_pose(
                     image_format=mp.ImageFormat.SRGB,
                     data=np.ascontiguousarray(rgb_frame),
                 )
-                timestamp_ms = int((frame_idx / fps) * 1000)
-
-                result = landmarker.detect_for_video(mp_image, timestamp_ms)
+                if frame_mode == "video":
+                    timestamp_ms = int((frame_idx / fps) * 1000)
+                    result = landmarker.detect_for_video(mp_image, timestamp_ms)
+                else:
+                    result = landmarker.detect(mp_image)
 
                 row = [frame_idx]
                 if result.pose_landmarks:
@@ -233,10 +303,16 @@ def main(argv=None):
     p.add_argument("video", help="input video file")
     p.add_argument("--model-variant", default="lite", choices=sorted(MODEL_URLS),
                    help="pose model accuracy/speed tradeoff (default: lite)")
+    p.add_argument("--frame-mode", default="image", choices=("video", "image"),
+                   help="'image' detects each frame independently, no temporal "
+                        "carry-over (default); 'video' tracks ROI across frames")
     p.add_argument("--out-dir", default=None, help="write artifacts here instead of next to the video")
     args = p.parse_args(argv)
 
-    ex = extract_pose(args.video, out_dir=args.out_dir, model_variant=args.model_variant)
+    ex = extract_pose(
+        args.video, out_dir=args.out_dir, model_variant=args.model_variant,
+        frame_mode=args.frame_mode,
+    )
 
     print(f"Processed {ex.frames} frames.")
     print(f"Pose detected in {ex.detected_frames} frames ({ex.detection_rate:.1%}).")

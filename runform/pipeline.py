@@ -44,7 +44,7 @@ def _key_joint_visibility(csv_path):
     return None if pd.isna(val) else round(float(val), 3)
 
 
-def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9):
+def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9, frame_mode="image"):
     """Raw clip -> all artifacts + quality report.
 
     Returns a dict with artifact paths, video properties, quality flags,
@@ -57,7 +57,7 @@ def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9):
     # Lazy import: mediapipe/cv2 are heavy and only this stage needs them.
     from .pose import extract_pose
 
-    ex = extract_pose(video_path, out_dir=out_dir, model_variant=model_variant)
+    ex = extract_pose(video_path, out_dir=out_dir, model_variant=model_variant, frame_mode=frame_mode)
     duration_s = ex.frames / ex.fps if ex.fps else 0.0
 
     if ex.detection_rate < HARD_MIN_DETECTION_RATE:
