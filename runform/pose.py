@@ -187,10 +187,24 @@ def extract_pose(
     out_dir: str | None = None,
     model_variant: str = "lite",
     progress_every: int = 100,
+    frame_mode: str = "image",
 ) -> PoseExtraction:
     """Run pose estimation over a video. Writes the skeleton overlay video
     and the landmarks CSV next to the input (or into out_dir) and returns
-    a PoseExtraction. Raises VideoError on unreadable/empty input."""
+    a PoseExtraction. Raises VideoError on unreadable/empty input.
+
+    frame_mode="image" (default) detects every frame independently with
+    no memory between frames. Slower than "video" mode, but validated
+    against real treadmill footage to noticeably reduce left/right strike
+    imbalance (BUILD_PLAN.md Phase 0) -- "video" mode's ROI tracking can
+    carry a bad lock on one leg forward across many frames, and per-frame
+    detection doesn't have that failure mode.
+    frame_mode="video" uses MediaPipe's VIDEO running mode, which tracks
+    each frame's ROI from the previous frame's detection: smoother and
+    faster, but susceptible to the carry-over problem above.
+    """
+    if frame_mode not in ("video", "image"):
+        raise ValueError(f"Unknown frame_mode '{frame_mode}'. Options: video, image")
     model = ensure_model(model_variant)
 
     cap = cv2.VideoCapture(input_path)
@@ -219,7 +233,7 @@ def extract_pose(
 
     options = PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=model),
-        running_mode=RunningMode.VIDEO,
+        running_mode=RunningMode.VIDEO if frame_mode == "video" else RunningMode.IMAGE,
         num_poses=1,
         min_pose_detection_confidence=0.5,
         min_tracking_confidence=0.5,
@@ -240,9 +254,11 @@ def extract_pose(
                     image_format=mp.ImageFormat.SRGB,
                     data=np.ascontiguousarray(rgb_frame),
                 )
-                timestamp_ms = int((frame_idx / fps) * 1000)
-
-                result = landmarker.detect_for_video(mp_image, timestamp_ms)
+                if frame_mode == "video":
+                    timestamp_ms = int((frame_idx / fps) * 1000)
+                    result = landmarker.detect_for_video(mp_image, timestamp_ms)
+                else:
+                    result = landmarker.detect(mp_image)
 
                 row = [frame_idx]
                 if result.pose_landmarks:
@@ -287,10 +303,16 @@ def main(argv=None):
     p.add_argument("video", help="input video file")
     p.add_argument("--model-variant", default="lite", choices=sorted(MODEL_URLS),
                    help="pose model accuracy/speed tradeoff (default: lite)")
+    p.add_argument("--frame-mode", default="image", choices=("video", "image"),
+                   help="'image' detects each frame independently, no temporal "
+                        "carry-over (default); 'video' tracks ROI across frames")
     p.add_argument("--out-dir", default=None, help="write artifacts here instead of next to the video")
     args = p.parse_args(argv)
 
-    ex = extract_pose(args.video, out_dir=args.out_dir, model_variant=args.model_variant)
+    ex = extract_pose(
+        args.video, out_dir=args.out_dir, model_variant=args.model_variant,
+        frame_mode=args.frame_mode,
+    )
 
     print(f"Processed {ex.frames} frames.")
     print(f"Pose detected in {ex.detected_frames} frames ({ex.detection_rate:.1%}).")
