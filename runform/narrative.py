@@ -155,6 +155,17 @@ def validate_output(parsed, assessment):
         issues = []
     if len(issues) > MAX_ISSUES:
         problems.append(f"{len(issues)} issues given; max is {MAX_ISSUES}")
+    # Symmetric to the empty-cause_ids check below: an empty issues list
+    # is only valid when there is nothing to report. If root causes WERE
+    # identified, "issues: []" is silent under-reporting, not a safe
+    # default -- without this, a model that fails once can retry into
+    # dropping every real finding rather than fixing the actual problem,
+    # and that emptied response has always passed validation unchecked.
+    if cause_ids and not issues:
+        problems.append(
+            f"root causes {sorted(cause_ids)} were identified but no "
+            f"issues were reported"
+        )
     for i, issue in enumerate(issues):
         if not isinstance(issue, dict):
             problems.append(f"issue {i} is not an object")
