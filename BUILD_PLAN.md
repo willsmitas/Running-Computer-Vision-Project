@@ -148,19 +148,36 @@ predecessor's acceptance criteria pass.
 **Nothing downstream is worth building until this passes.** The existing
 scripts have only been tested against synthetic data.
 
-- [ ] Run `pose_skeleton_starter.py` on 3 real treadmill clips
-- [ ] Watch each skeleton overlay in full; check limb-crossover frames
-      specifically for left/right leg swapping
-- [ ] Run `running_metrics.py`; manually count foot strikes in the video and
-      compare to `steps_detected`
-- [ ] Verify `direction` is correct
-- [ ] Sanity-check cadence against a manual count (count strikes over 30s)
-- [ ] Tune `MIN_SWING_RATIO`, `prominence`, and `--smooth` against real data;
-      current values are guesses
-- [ ] Apply the trunk-lean sign fix
+Results as of 2026-07-30 (full evidence: `scripts/phase0_validation.md`):
+
+- [x] Run `pose_skeleton_starter.py` on 3 real treadmill clips
+- [x] Watch each skeleton overlay in full; check limb-crossover frames
+      specifically for left/right leg swapping — no swap found; the
+      far-leg failure mode is landmark collapse onto the near leg, which
+      the visibility flag catches
+- [x] Run `running_metrics.py`; manually count foot strikes in the video and
+      compare to `steps_detected` — exact on 6flat (54/54) and 8flat
+      (43/43); 5flat off by 2 (60 vs ~62, degraded final 3 s)
+- [x] Verify `direction` is correct — all three read `"right"`, matches
+      framing
+- [x] Sanity-check cadence against a manual count — within 1.5 spm on all
+      3 clips. NOTE: the clip filenames are paces per mile (5flat =
+      5:00/mile, fastest; 8flat = 8:00/mile, slowest), confirmed by
+      belt-mark timing; cadence rises with actual speed as expected
+- [x] Tune `MIN_SWING_RATIO`, `prominence`, and `--smooth` against real data
+      — current values produced exact counts on both clean clips, so they
+      were kept; still provisional for degraded footage
+- [x] Apply the trunk-lean sign fix — regression-tested for both facings
 
 **Acceptance:** detected strike count within ±1 of manual count on all 3
 clips; cadence within 3 spm of manual count.
+
+**Status: NOT passed — cadence bar met on 3/3, strike-count bar met on
+2/3 (5flat misses by 2).** Re-shoot required regardless: the far leg is
+below the visibility threshold in every clip, so per-side and asymmetry
+metrics cannot be validated on this footage. Re-shoot with light on the
+far side of the body, the runner fully in frame for the whole clip, and
+the console speed logged in filming notes at capture time.
 
 **If left/right leg assignment swaps at crossover, stop and fix that first.**
 It silently corrupts every per-side metric and every asymmetry number, and no
