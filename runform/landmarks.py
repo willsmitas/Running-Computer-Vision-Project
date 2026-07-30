@@ -6,14 +6,12 @@ it in one consumer silently corrupts the other, so every module must
 import the scheme from here and nowhere else.
 """
 
-# Raw MediaPipe face landmarks (indices 0-10: nose, eyes, ears, mouth
-# corners) that get collapsed into one averaged "head" point. The nose
-# alone is noisy in profile view and jitters frame to frame; a head
-# centroid is a much stabler anchor for the skeleton.
-NUM_FACE_LANDMARKS = 11
-
-# Reduced set: index 0 = averaged head, indices 1-22 = body landmarks in
-# MediaPipe order starting from left_shoulder.
+# Reduced set: index 0 = averaged head (pose.py collapses the backend's
+# face points into one centroid — the nose alone is noisy in profile view
+# and jitters frame to frame), indices 1-22 = body landmarks starting
+# from left_shoulder. The name order predates the RTMPose backend (it is
+# the old MediaPipe body-landmark order) and is frozen: every landmarks
+# CSV ever written uses it.
 LANDMARK_NAMES = [
     "head",
     "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",

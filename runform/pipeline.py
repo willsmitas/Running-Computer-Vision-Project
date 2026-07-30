@@ -77,7 +77,7 @@ def _key_joint_visibility(csv_path):
     return out
 
 
-def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9, frame_mode="image"):
+def analyze_clip(video_path, out_dir=None, mode="balanced", device="cpu", smooth=9):
     """Raw clip -> all artifacts + quality report.
 
     Returns a dict with artifact paths, video properties, quality flags,
@@ -87,10 +87,11 @@ def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9, frame
     if not os.path.exists(video_path):
         raise VideoError(f"Video not found: {video_path}")
 
-    # Lazy import: mediapipe/cv2 are heavy and only this stage needs them.
+    # Lazy import: rtmlib/onnxruntime/cv2 are heavy and only this stage
+    # needs them.
     from .pose import extract_pose
 
-    ex = extract_pose(video_path, out_dir=out_dir, model_variant=model_variant, frame_mode=frame_mode)
+    ex = extract_pose(video_path, out_dir=out_dir, mode=mode, device=device)
     duration_s = ex.frames / ex.fps if ex.fps else 0.0
 
     if ex.detection_rate < HARD_MIN_DETECTION_RATE:
@@ -98,8 +99,8 @@ def analyze_clip(video_path, out_dir=None, model_variant="lite", smooth=9, frame
             f"Pose detected in only {ex.detection_rate:.0%} of frames — "
             f"metrics from mostly-interpolated tracking would be junk, so "
             f"none were computed. Common causes: runner too small in frame, "
-            f"motion blur, occlusion, poor lighting. Try model_variant="
-            f"'full' or 'heavy', or re-film with the runner filling the frame."
+            f"motion blur, occlusion, poor lighting. Try mode='performance', "
+            f"or re-film with the runner filling the frame."
         )
 
     quality_flags = []

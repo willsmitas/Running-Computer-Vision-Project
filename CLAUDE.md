@@ -9,7 +9,10 @@ Full plan in `BUILD_PLAN.md`. Read it before proposing architecture changes.
 ## Stack
 
 - Python 3.11
-- MediaPipe Tasks API (`PoseLandmarker`) — NOT the removed `mp.solutions` API
+- RTMPose via rtmlib (`Wholebody`, COCO-WholeBody-133) on onnxruntime,
+  CPU. Models auto-download to `~/.cache/rtmlib`. MediaPipe was removed
+  2026-07-30 after it swapped left/right leg identity at limb crossover
+  on real footage (see `scripts/phase0_validation.md` addendum).
 - OpenCV, numpy, pandas, scipy
 - Local LLM inference via Ollama (8B-class instruct model)
 - No paid inference APIs. Cost-per-use must stay at zero.
@@ -21,7 +24,7 @@ Full plan in `BUILD_PLAN.md`. Read it before proposing architecture changes.
     (one averaged `head` point + 22 body landmarks). Single source of
     truth for the index-order invariant below.
   - `pose.py` — video → skeleton overlay + landmarks CSV. Only module
-    that imports mediapipe/cv2.
+    that imports rtmlib/cv2.
   - `metrics.py` — landmarks CSV → metrics JSON. Gait events, joint
     angles, cadence, contact time, overstride, asymmetry.
   - `pipeline.py` — Phase 1: video → all artifacts + quality flags.
@@ -38,14 +41,15 @@ Full plan in `BUILD_PLAN.md`. Read it before proposing architecture changes.
 
 ## Non-obvious invariants — do not break these
 
-- **Aspect correction is mandatory.** MediaPipe normalizes x by frame width
-  and y by frame height independently. All x values must be scaled by
-  (width/height) before any geometry. Skipping this changed overstride by
-  74% in testing.
+- **Aspect correction is mandatory.** The landmarks CSV stores x
+  normalized by frame width and y by frame height independently (frozen
+  convention, kept from the original MediaPipe output). All x values must
+  be scaled by (width/height) before any geometry. Skipping this changed
+  overstride by 74% in testing.
 - **Gait events use ankle position RELATIVE TO HIP**, never absolute. The
   relative signal cancels camera pan and forward travel.
-- **Ignore MediaPipe's z coordinate.** Single-camera depth is unreliable.
-  Sagittal-plane 2D only.
+- **Ignore the z column.** It is a 0.0 filler (RTMPose is 2D-only), and
+  single-camera depth was never reliable anyway. Sagittal-plane 2D only.
 - **All distance metrics normalize by leg length** so results are comparable
   across filming distances.
 - **`joint_angle` returns interior angle** (straight leg = 180°). Sports
@@ -82,9 +86,12 @@ push logic into code rather than into the prompt.
 - Synthetic-data tests: generate landmark CSVs with known ground truth
   (known cadence, known planted fault) and assert recovery. Validates
   signal-processing logic without needing video.
-- Synthetic tests do NOT validate real-world behavior. Known open risk:
-  MediaPipe may swap left/right leg assignment at limb crossover, which
-  would corrupt all per-side and asymmetry metrics. Unverified.
+- Synthetic tests do NOT validate real-world behavior. Known risk:
+  a pose backend can swap left/right leg assignment at limb crossover,
+  corrupting all per-side and asymmetry metrics. CONFIRMED for MediaPipe
+  on real footage (the reason it was removed); RTMPose held identity on
+  the same clip, but the failure class is footage-dependent — re-check
+  the left/right alternation on every new footage type.
 - LLM layer: maintain a regression set of metric payloads with expected
   findings. Run against every prompt or model change.
 

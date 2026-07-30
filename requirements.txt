@@ -1,5 +1,6 @@
 # Runtime dependencies. No paid inference APIs — cost per use stays zero.
-mediapipe>=0.10.30      # Tasks API (PoseLandmarker); mp.solutions is removed
+rtmlib                  # RTMPose backend (Wholebody, COCO-WholeBody-133)
+onnxruntime             # rtmlib inference runtime (CPU); models download to ~/.cache/rtmlib
 opencv-python
 numpy
 pandas

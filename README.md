@@ -10,9 +10,14 @@ for invariants and conventions before changing anything.
 ## Setup
 
 ```
-.venv\Scripts\activate          # existing venv (mediapipe, opencv, numpy, pandas, scipy)
+.venv\Scripts\activate          # existing venv (rtmlib, onnxruntime, opencv, numpy, pandas, scipy)
 pip install -r requirements.txt # only needed on a fresh environment
 ```
+
+Pose models (RTMPose via rtmlib) download automatically to
+`~/.cache/rtmlib` on first `analyze` run. CPU inference is slow
+(roughly 1–5 s/frame); pass `--mode lightweight` to trade accuracy for
+speed, or `--device cuda` on a machine with a GPU-enabled onnxruntime.
 
 The narrative layer needs [Ollama](https://ollama.com) running locally:
 `ollama pull llama3.1:8b`. Everything upstream of it runs without.
@@ -51,7 +56,18 @@ python -m unittest discover -s tests -t .
   Manual ground-truth strike counts match `steps_detected` exactly on 2 of
   3 clips (the third, the fastest clip, misses by 2 in a degraded final
   3 s) and cadence is within 3 spm on all 3; no left/right leg swap was
-  found at limb crossover.
+  found at limb crossover **on those clips** — but see below.
+  - **2026-07-30 addendum: leg-identity swap confirmed on new footage.**
+    A fourth clip (`british_guy_treadmill.mp4`, different runner/gym,
+    small social-media re-encode, left-facing) shows MediaPipe swapping
+    left/right leg identity at essentially every limb crossover: the
+    labels track front-leg/rear-leg roles, not physical legs. All
+    per-side and asymmetry metrics from that clip are invalid, one
+    segment emits an impossible 327 spm cadence, and **no existing
+    quality gate catches it** (100% detection, visibility 0.83+). The
+    BUILD_PLAN "stop and fix first" gate is triggered; see the addendum
+    in `scripts/phase0_validation.md` for evidence and the proposed
+    sign-test quality flag.
   - The clip filenames are paces per mile (`5flat` = 5:00/mile ≈ 12 mph,
     fastest; `8flat` = 8:00/mile = 7.5 mph, slowest), and belt-mark
     timing confirms the labels to within a few percent. Convert pace to
