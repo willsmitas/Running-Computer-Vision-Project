@@ -161,9 +161,9 @@ Results as of 2026-07-30 (full evidence: `scripts/phase0_validation.md`):
 - [x] Verify `direction` is correct — all three read `"right"`, matches
       framing
 - [x] Sanity-check cadence against a manual count — within 1.5 spm on all
-      3 clips. NOTE: cadence vs speed only makes sense after correcting
-      the clip labels; belt-mark timing shows the filenames are
-      speed-reversed (5flat is the fastest clip, 8flat the slowest)
+      3 clips. NOTE: the clip filenames are paces per mile (5flat =
+      5:00/mile, fastest; 8flat = 8:00/mile, slowest), confirmed by
+      belt-mark timing; cadence rises with actual speed as expected
 - [x] Tune `MIN_SWING_RATIO`, `prominence`, and `--smooth` against real data
       — current values produced exact counts on both clean clips, so they
       were kept; still provisional for degraded footage
@@ -173,12 +173,11 @@ Results as of 2026-07-30 (full evidence: `scripts/phase0_validation.md`):
 clips; cadence within 3 spm of manual count.
 
 **Status: NOT passed — cadence bar met on 3/3, strike-count bar met on
-2/3 (5flat misses by 2).** Re-shoot required regardless: clip speed
-labels are wrong (above), and the far leg is below the visibility
-threshold in every clip, so per-side and asymmetry metrics cannot be
-validated on this footage. Re-shoot with verified/recorded belt speeds,
-light on the far side of the body, and the runner fully in frame for the
-whole clip.
+2/3 (5flat misses by 2).** Re-shoot required regardless: the far leg is
+below the visibility threshold in every clip, so per-side and asymmetry
+metrics cannot be validated on this footage. Re-shoot with light on the
+far side of the body, the runner fully in frame for the whole clip, and
+the console speed logged in filming notes at capture time.
 
 **If left/right leg assignment swaps at crossover, stop and fix that first.**
 It silently corrupts every per-side metric and every asymmetry number, and no

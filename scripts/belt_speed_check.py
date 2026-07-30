@@ -4,8 +4,9 @@ The belt's surface marks (seam, wear smudges) pass a fixed image band
 once per belt revolution. Measuring that period per clip gives relative
 belt speed (speed is proportional to 1/period for the same belt and fps),
 which catches mislabeled clips before their nominal speeds are fed to
-`runform interpret`. This caught the 2026-07 clip set being speed-reversed
-relative to its filenames (see phase0_validation.md).
+`runform interpret`. On the 2026-07 clip set this confirmed the filename
+labels are paces per mile (5flat = 5:00/mile is the fastest clip), not
+treadmill mph (see phase0_validation.md).
 
 Method: average a thin pixel band on the belt each frame, subtract the
 per-column temporal median to remove static content, collapse each frame

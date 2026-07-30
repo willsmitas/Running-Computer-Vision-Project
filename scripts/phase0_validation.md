@@ -11,17 +11,23 @@ them directly — contact-sheet montages of every detected strike frame,
 frame-by-frame sequences around suspect regions and limb crossovers, and
 x-t slice analysis of the belt surface for the speed check.
 
-## 1. Headline finding: the clip filenames are speed-REVERSED
+## 1. Clip labels are PACES per mile, and belt timing confirms them
+
+The filenames encode pace per mile — `5flat` = 5:00/mile (12.0 mph),
+`6flat` = 6:00/mile (10.0 mph), `8flat` = 8:00/mile (7.5 mph) — NOT
+treadmill mph. Under pace semantics the 5 clip is the fastest and the 8
+clip the slowest, and the belt measurement below confirms exactly that
+ordering and, to within a few percent, the labeled magnitudes.
 
 The treadmill belt has a visible white mark. Its passage period past a
 fixed image band was measured per clip (background-subtracted x-t slice,
 peak times fitted by linear regression; r² ≥ 0.999, sub-frame precision):
 
-| file | belt revolution period | relative belt speed | actual speed if slowest = 5.0 mph |
-|---|---|---|---|
-| `Smitas_5flat` | 16.84-16.89 frames | 1.66 | **~8.1 mph (fastest)** |
-| `Smitas_6flat` | 20.86 frames | 1.34 | **~6.6 mph** |
-| `Smitas_8flat` | 27.7-28.1 frames | 1.00 | **~5.0 mph (slowest)** |
+| file | belt revolution period | measured relative speed | expected from pace label | implied speed (6flat = 10.0 mph anchor) |
+|---|---|---|---|---|
+| `Smitas_5flat` | 16.84-16.89 frames | 1.66 | 1.60 | ~12.4 mph (~4:51/mile) |
+| `Smitas_6flat` | 20.86 frames | 1.34 | 1.33 | 10.0 mph (6:00/mile) |
+| `Smitas_8flat` | 27.7-28.1 frames | 1.00 | 1.00 | ~7.5 mph (~8:01/mile) |
 
 Same belt, same fps in all clips, so speed ∝ 1/period. The lines are the
 belt mark, not the runner's shadow: their period is metronomic, agrees
@@ -33,21 +39,23 @@ clip; a foot shadow would be locked near 1.0). Reproduce with
 
 Consequences:
 
-- The "cadence falls as speed rises" anomaly (185.8 → 176.6 → 165.7 spm
-  across files named 5 → 6 → 8) is **not** a code bug and not
-  physiologically backwards. Against actual belt speed, cadence RISES
+- The "cadence falls as speed rises" anomaly was an artifact of reading
+  the filenames as mph. Against actual belt speed, cadence RISES
   165.7 → 176.6 → 185.8 spm and right-leg ground contact FALLS
-  290 → 232 → 220 ms. Both are textbook-normal speed responses.
+  290 → 232 → 220 ms. Both are textbook-normal speed responses. Not a
+  code bug, not a physiology surprise.
 - This is also why the RTMPose backend swap (`rtmpose_ab_comparison.md`)
   improved visibility but couldn't move the cadence pattern — the pattern
   was never a pose defect.
-- **Do not pass the filename speeds to `python -m runform interpret`.**
-  Until the clips are re-filmed or re-labeled with verified speeds, any
-  speed-profile slope computed from these labels has the wrong sign.
-- The middle clip measures ~6.5-6.7 mph against a 5.0 anchor, so either
-  it was run slightly above 6.0 or the treadmill's calibration differs
-  from true speed by a few percent. Filming notes should record the
-  console speed at capture time to settle this.
+- When feeding these clips to `python -m runform interpret`, convert the
+  pace labels to actual speeds (e.g. m/s: ~5.5 / 4.5 / 3.35), fastest
+  clip = `5flat`. Passing "5/6/8" as speed values would reverse every
+  speed-profile slope.
+- The 8:00 and 6:00 clips match their labels to ~1 s/mile; the 5:00 clip
+  measures ~3-4% fast (~4:51/mile), which is either a runner slightly
+  ahead of the belt setting or treadmill calibration error. Filming
+  notes should record the console readout at capture time to settle
+  such gaps in future sessions.
 
 ## 2. Manual ground-truth strike count (acceptance test)
 
@@ -112,9 +120,9 @@ right. No threshold tuning fixes a leg the camera can barely see.
 
 Required for the re-shoot:
 
-1. Record and verify the actual belt speed per clip (film the console,
-   or log it in filming notes at capture time). Name files after
-   verified speeds.
+1. Log the console speed per clip in filming notes at capture time (the
+   labels checked out this time, but the ~4% gap on the 5:00 clip was
+   only resolvable because the belt mark happened to be measurable).
 2. Light the far side of the body, or accept right-leg-only metrics.
    More light + faster shutter would also reduce the motion blur that
    degrades the fast clip's tail.

@@ -49,15 +49,18 @@ python -m unittest discover -s tests -t .
 - **Phase 0 (validation on real treadmill clips) has been run — partial
   pass, blocked on footage.** Full results in `scripts/phase0_validation.md`.
   Manual ground-truth strike counts match `steps_detected` exactly on 2 of
-  3 clips and cadence is within 3 spm on all 3; no left/right leg swap was
-  found at limb crossover. Two hard blockers require a re-shoot before
-  Phase 0 can pass:
-  - The clip filenames are speed-REVERSED — belt-mark timing shows
-    `Smitas_5flat` is the fastest clip (~8 mph) and `Smitas_8flat` the
-    slowest (~5 mph). Do not feed the filename speeds to `interpret`.
-    (This also resolves the "cadence falls with speed" anomaly: against
-    actual speed, cadence rises normally.)
-  - The far (left) leg tracks below the visibility threshold in every
-    clip, so left-side and asymmetry metrics are unvalidated and
-    untrustworthy on this footage.
+  3 clips (the third, the fastest clip, misses by 2 in a degraded final
+  3 s) and cadence is within 3 spm on all 3; no left/right leg swap was
+  found at limb crossover.
+  - The clip filenames are paces per mile (`5flat` = 5:00/mile ≈ 12 mph,
+    fastest; `8flat` = 8:00/mile = 7.5 mph, slowest), and belt-mark
+    timing confirms the labels to within a few percent. Convert pace to
+    actual speed before feeding `interpret` — passing "5/6/8" as speed
+    values would reverse every speed-profile slope. With true speeds,
+    cadence rises with speed normally; the earlier "cadence falls with
+    speed" anomaly was a misreading of the labels as mph.
+  - Hard blocker: the far (left) leg tracks below the visibility
+    threshold in every clip, so left-side and asymmetry metrics are
+    unvalidated and untrustworthy on this footage. A re-shoot with light
+    on the far side is required before Phase 0 can pass.
 - Phase 6 (UI) is deliberately last; everything is exercisable via CLI.
