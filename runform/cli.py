@@ -34,12 +34,11 @@ def _emit(obj, out_path=None):
 
 
 def cmd_analyze(args):
-    from .pipeline import analyze_clip  # lazy: pulls in mediapipe
+    from .pipeline import analyze_clip  # lazy: pulls in rtmlib/onnxruntime
 
     result = analyze_clip(
         args.video, out_dir=args.out_dir,
-        model_variant=args.model_variant, smooth=args.smooth,
-        frame_mode=args.frame_mode,
+        mode=args.mode, device=args.device, smooth=args.smooth,
     )
     print(f"Frames:            {result['frames']} ({result['duration_s']} s @ {result['fps']:.6g} fps)")
     print(f"Detection rate:    {result['detection_rate']:.1%}")
@@ -124,8 +123,11 @@ def build_parser():
     a = sub.add_parser("analyze", help="video -> skeleton video, landmarks CSV, metrics + quality")
     a.add_argument("video")
     a.add_argument("--out-dir", default=None)
-    a.add_argument("--model-variant", default="lite", choices=("lite", "full", "heavy"))
-    a.add_argument("--frame-mode", default="image", choices=("video", "image"))
+    a.add_argument("--mode", default="balanced",
+                   choices=("performance", "balanced", "lightweight"),
+                   help="rtmlib accuracy/speed preset (default: balanced)")
+    a.add_argument("--device", default="cpu", choices=("cpu", "cuda", "mps"),
+                   help="onnxruntime execution device (default: cpu)")
     a.add_argument("--smooth", type=int, default=9)
     a.set_defaults(func=cmd_analyze)
 

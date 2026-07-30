@@ -8,7 +8,7 @@ Two levels:
     the Phase 2+ layers (gating, root causes, comparison) directly.
 
 Synthetic tests validate logic, NOT real-world behavior — the known open
-risk (MediaPipe left/right leg swap at crossover) is untouched by any of
+risk (pose-backend left/right leg swap at crossover) is untouched by any of
 this and remains a Phase 0 gate on real footage.
 """
 

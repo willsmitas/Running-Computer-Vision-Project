@@ -200,6 +200,12 @@ only the Smitas clips — a first RTMPose A/B on the swap clip already
 shows it holding identity perfectly (40/40 sign balance, cadence within
 1 spm of manual on one segment) where MediaPipe swaps every crossover,
 though its contact-time calibration needs separate validation.
+**Update, same day: (2) is resolved — the pose backend was swapped to
+RTMPose (rtmlib Wholebody) and MediaPipe removed from the codebase.**
+(1), the automated swap flag, remains open and is still worth adding:
+the failure class is backend-agnostic. RTMPose's event-timing
+calibration (ground-contact times read ~100 ms longer than MediaPipe's
+on comparable footage) also needs validation against ground truth.
 
 ### Phase 1 — Pipeline orchestration
 

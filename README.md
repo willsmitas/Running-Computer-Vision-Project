@@ -10,9 +10,14 @@ for invariants and conventions before changing anything.
 ## Setup
 
 ```
-.venv\Scripts\activate          # existing venv (mediapipe, opencv, numpy, pandas, scipy)
+.venv\Scripts\activate          # existing venv (rtmlib, onnxruntime, opencv, numpy, pandas, scipy)
 pip install -r requirements.txt # only needed on a fresh environment
 ```
+
+Pose models (RTMPose via rtmlib) download automatically to
+`~/.cache/rtmlib` on first `analyze` run. CPU inference is slow
+(roughly 1–5 s/frame); pass `--mode lightweight` to trade accuracy for
+speed, or `--device cuda` on a machine with a GPU-enabled onnxruntime.
 
 The narrative layer needs [Ollama](https://ollama.com) running locally:
 `ollama pull llama3.1:8b`. Everything upstream of it runs without.

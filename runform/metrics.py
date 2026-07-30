@@ -12,7 +12,7 @@ will be unreliable — especially knee angle and overstride.
 Invariants preserved here (CLAUDE.md — do not break):
   - Aspect correction on x is mandatory before any geometry.
   - Gait events use ankle position RELATIVE TO HIP, never absolute.
-  - MediaPipe's z is ignored entirely; sagittal-plane 2D only.
+  - The z column is ignored entirely (0.0 filler); sagittal-plane 2D only.
   - All distance metrics normalize by leg length.
   - joint_angle returns the INTERIOR angle (straight leg = 180°);
     literature flexion = 180 − interior. Convert before comparing.
@@ -81,7 +81,7 @@ def load_and_condition(csv_path, aspect, smooth_window):
 
     out = pd.DataFrame(coords)
 
-    # ASPECT CORRECTION: MediaPipe normalizes x by frame width and y by
+    # ASPECT CORRECTION: the landmarks CSV normalizes x by frame width and y by
     # frame height independently. On a 16:9 video, one x-unit spans 1.78x
     # more real-world distance than one y-unit. Scaling x by the aspect
     # ratio puts both axes in the same units so angles and distances are
