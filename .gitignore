@@ -16,3 +16,9 @@ data/
 
 # Raw source clips (large, personal footage — not build inputs)
 *.mov
+
+# Generated output from the alternative-pose-backend evaluation
+# (scripts/rtmpose_ab_comparison.md, scripts/sports2d_evaluation.md) —
+# large per-run artifacts, not the evaluation's actual findings
+out_rtmpose/
+out_sports2d/

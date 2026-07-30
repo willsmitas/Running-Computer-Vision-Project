@@ -24,7 +24,7 @@ from .errors import NarrativeError
 # Bump on ANY prompt change and store with every Assessment, so you can
 # tell whether output changed because the runner changed or because the
 # prompt did (BUILD_PLAN data model).
-PROMPT_VERSION = "0.1.0"
+PROMPT_VERSION = "0.2.0"
 
 DEFAULT_MODEL = "llama3.1:8b"
 DEFAULT_HOST = "http://localhost:11434"
@@ -91,7 +91,11 @@ Hard rules — violating any of them invalidates your response:
 1. Use only the findings provided. Never invent, estimate, or recompute
    a number, and never mention a metric that is not in allowed_metrics.
 2. Cover at most {MAX_ISSUES} issues, in the given root-cause order. Do not
-   re-rank, merge, or add issues.
+   re-rank, merge, or add issues. If ranked_root_causes is EMPTY, that
+   means no fault was found — this is a good outcome, not missing data.
+   You MUST return "issues": [] in that case. Do not invent a root cause,
+   and do not cite a metric name as if it were one. Say in the summary
+   that the session looked clean.
 3. Every issue must cite the metric names it rests on in metrics_cited.
 4. Never diagnose an injury or name a medical condition. If pain is
    mentioned in the runner context, say only that a licensed
@@ -151,6 +155,17 @@ def validate_output(parsed, assessment):
         issues = []
     if len(issues) > MAX_ISSUES:
         problems.append(f"{len(issues)} issues given; max is {MAX_ISSUES}")
+    # Symmetric to the empty-cause_ids check below: an empty issues list
+    # is only valid when there is nothing to report. If root causes WERE
+    # identified, "issues: []" is silent under-reporting, not a safe
+    # default -- without this, a model that fails once can retry into
+    # dropping every real finding rather than fixing the actual problem,
+    # and that emptied response has always passed validation unchecked.
+    if cause_ids and not issues:
+        problems.append(
+            f"root causes {sorted(cause_ids)} were identified but no "
+            f"issues were reported"
+        )
     for i, issue in enumerate(issues):
         if not isinstance(issue, dict):
             problems.append(f"issue {i} is not an object")
@@ -168,7 +183,13 @@ def validate_output(parsed, assessment):
                 problems.append(
                     f"issue {i} cites metrics that were not supplied: {invented}"
                 )
-        if cause_ids and issue.get("root_cause") not in cause_ids:
+        # No "cause_ids and" guard: when cause_ids is empty (a clean
+        # session, no root causes identified), nothing is a member of it,
+        # so ANY issue correctly fails here. That's intentional -- a clean
+        # session has nothing to report, and the model fabricating a
+        # critique anyway must be rejected, not waved through because
+        # there happened to be zero real causes to check against.
+        if issue.get("root_cause") not in cause_ids:
             problems.append(
                 f"issue {i} root_cause '{issue.get('root_cause')}' is not one "
                 f"of the provided causes {sorted(cause_ids)}"
