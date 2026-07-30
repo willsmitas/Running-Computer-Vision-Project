@@ -133,3 +133,179 @@ Threshold note (`MIN_SWING_RATIO`, `PROMINENCE_SD_RATIO`, `--smooth`):
 the current values produced exact strike counts on the two clean clips
 and correct events everywhere tracking was usable, so no retuning was
 done. They remain provisional for degraded footage.
+
+---
+
+# Addendum 2026-07-30: `british_guy_treadmill.mp4` — leg-identity swap found
+
+New validation clip: different runner, treadmill, and gym. 534x574 px,
+30 fps, 177 frames (5.9 s) — much smaller and shorter than the Smitas
+clips; likely a social-media re-encode. Speed unknown; the runner's pace
+was estimated at ~4:40/mile by eye, and nothing in this analysis could
+verify or refute that (see belt check below). Clean sagittal framing,
+well lit on both sides, runner fully in frame, facing screen-LEFT (the
+Smitas clips face right).
+
+## Jump cut and segmentation
+
+The clip contains one hard splice at frame 79->80 (frame-diff 6.4x the
+median; visually confirmed — camera reframes and the gait phase is
+discontinuous). No other cuts (secondary diff spikes at 74-77 and
+167-168 are continuous motion). Gait intervals must never span a splice,
+so the clip was split and each segment analyzed independently:
+`british_guy_segA.mp4` = frames 0-79 (2.67 s), `british_guy_segB.mp4` =
+frames 80-176 (3.23 s). Both are under `MIN_CLIP_SECONDS`, so both carry
+the `short_clip` flag by design.
+
+## Surface quality is the best yet — which makes the failure worse
+
+Both segments: 100% detection rate, worst-key-joint visibility left
+0.93 / 0.92 and right 0.84 / 0.83 — both sides clear the 0.6 gate that
+the Smitas far leg failed. On paper this is the first footage on which
+per-side and asymmetry metrics are validatable. They are not, because:
+
+## 1. MediaPipe swaps left/right leg identity at essentially every crossover
+
+This is the exact failure mode the BUILD_PLAN risk register calls
+"stop and fix that first", observed for the first time. On the Smitas
+clips the far-leg failure mode was landmark collapse; here the labels
+detach from the physical legs entirely.
+
+Evidence (reproducible from `out/british_guy_seg{A,B}_landmarks.csv`):
+
+- **Sign test.** In genuine gait, `left_ankle_x - right_ankle_x` flips
+  sign once per step (~ every 9.8 frames here) and spends ~50% of frames
+  each side of zero. Measured: the "left" ankle is the FRONT ankle on
+  76/80 frames (segA) and 93/97 (segB); the separation dips to near zero
+  every ~9.8 frames and bounces back without crossing. The anatomical
+  labels are tracking the spatial roles front-leg / rear-leg, flipping
+  identity at each crossover.
+- **Visual confirmation** (skeleton overlay, segA frames 2-13): the foot
+  planted at the front carries the red (left) chain; after it rotates
+  under the body to the rear it carries the blue (right) chain, while
+  the airborne foot crossing to the front picks up red. Same physical
+  foot, both colors, within 6 frames.
+
+Consequences observed in the emitted metrics:
+
+- segA `cadence_spm` = **327.3** — physically impossible, and the purest
+  symptom. The two per-side strike trains are step-periodic aliases
+  offset by ~5 frames, so the combined train has paired intervals
+  (5,14,6,13,...) and the in-band mean lands on the pair spacing. (True
+  cadence, from crossover timing and manual count: ~183 spm.)
+- All per-side values are front-leg-vs-rear-leg, not left-vs-right:
+  e.g. segA "left" overstride 0.63 vs "right" -0.30 is the geometry of
+  a foot at touchdown vs a foot behind the hip, not asymmetry. The
+  `asymmetry_pct` block (200% on overstride) is meaningless.
+- segB cadence (187.0) came out plausible **by luck** of interval
+  distribution — a corrupted clip can still emit a sane-looking number.
+
+**No existing quality gate catches this.** Detection 100%, visibility
+0.83+, no flags beyond `short_clip`. The pipeline currently has no
+defense against a clip whose per-side data is garbage while every
+quality signal reads excellent.
+
+## 2. Acceptance test: manual ground-truth strike count
+
+Every frame of both skeleton videos was inspected via contact-sheet
+montages (same methodology as the main report). Manual touchdown frames:
+
+- segA: ~10, ~20, ~30, ~40, ~49, ~59, ~69, ~79 (a foot is already
+  planted at frame 0 — clip-edge stance, strike predates the segment).
+  8 touchdowns, mean step period 9.86 frames -> **182.6 spm**.
+- segB: ~4, ~14, ~24, ~33, ~43, ~53, ~62, ~72, ~81, ~91.
+  10 touchdowns, mean step period 9.67 frames -> **186.2 spm**.
+
+| segment | steps_detected | manual | bar (±1) | cadence_spm | manual | bar (±3) |
+|---|---|---|---|---|---|---|
+| segA | 8 | 8 | pass | 327.3 | ~182.6 | **FAIL (by ~145)** |
+| segB | 9 | 10 | pass | 187.0 | ~186.2 | pass (by luck — see above) |
+
+The total step count survives the swap (each physical touchdown is
+captured once by whichever labeled train claims it), which means
+`steps_detected` alone cannot reveal the corruption either.
+
+## 3. Model/mode variants do not fix the swap
+
+Sign-test on segA landmarks per variant (`pos/neg` = frames with left
+ankle behind/in front; genuine alternation would be ~40/40 with ~8
+sustained flips):
+
+| variant | dx sign pos/neg | sign changes | cadence_spm |
+|---|---|---|---|
+| lite / image (default) | 4 / 76 | 6 | 327.3 |
+| heavy / image | 13 / 67 | 15 | 182.6 |
+| lite / video | 1 / 79 | 2 | 327.3 |
+| heavy / video | 21 / 55 | 16 | 183.1 |
+
+Heavy reduces swap frequency and its cadence happens to land near truth,
+but the labels still sit on the front leg ~3/4 of the time — per-side
+metrics remain garbage in every variant.
+
+**RTMPose (rtmlib Wholebody) holds identity where MediaPipe cannot.**
+The prototype backend (`scripts/prototype_rtmpose_pose.py`, run in a
+throwaway venv; landmarks in `out_rtmpose_bgt/`) was fed the same two
+segments and its CSVs pushed through the same unmodified metrics code:
+
+| segment | dx sign pos/neg | sign changes | cadence_spm | manual cadence |
+|---|---|---|---|---|
+| segA | **40 / 40** | **8** | 183.1 | ~182.6 |
+| segB | 51 / 46 | 11 | 195.2 | ~186.2 |
+
+That is textbook-genuine alternation: balanced sign split with one
+sustained flip per step (8 flips = 8 touchdowns on segA). segA cadence
+lands within 1 spm of manual. Two honest caveats: segB cadence reads
+9 spm high (interval-filter artifact on a 10-step sample — small-n, not
+identity corruption), and RTMPose's ground-contact times (~275-300 ms)
+run far longer than MediaPipe's near-leg values on comparable footage,
+so its event *timing* would need its own validation before adoption.
+The earlier "DO NOT promote RTMPose" verdict (`rtmpose_ab_comparison.md`)
+was based on the Smitas clips, where MediaPipe held identity; on
+footage where MediaPipe swaps, that verdict deserves re-examination —
+identity integrity is a harder requirement than per-joint visibility.
+
+## 4. What did validate on this footage
+
+- **Direction detection**: `"left"` on both segments — first validation
+  of the left-facing case (Smitas clips are all right-facing).
+- **Trunk lean sign**: positive (~10-11 deg toward travel) with the
+  runner visibly leaning forward — the trunk-lean sign fix holds for
+  left-facing footage. (Values are front/rear-contaminated per above;
+  only the sign is being credited here.)
+- **Jump-cut handling by segmentation**: no detected event interval
+  spans the splice, by construction.
+
+## 5. Belt speed check: no measurable mark
+
+Six candidate bands on the belt surface were tried with
+`belt_speed_check.py` on both segments. Every band either found too few
+consistent passages or locked onto a period of 9.6-9.7 frames — within
+2.5% of the step period (9.8), i.e. the runner's own gait/shadow, which
+the script's caution note explicitly says to reject. This treadmill
+shows no usable belt mark at this resolution, so the ~4:40/mile estimate
+stays **unverified**. The measured cadence (~183-186 spm) is consistent
+with a trained runner at that pace but does not confirm it.
+
+## 6. Verdict and required follow-up
+
+Phase 0 on this clip: **FAIL — the leg-swap gate triggers.** The Smitas
+finding ("no swap at 18 sampled crossovers") was real but does not
+generalize: swap behavior is footage-dependent, and the failure arrived
+on the *highest*-quality footage yet by every existing quality signal.
+Candidate contributing factors (unverified): low resolution, left-facing
+runner, and both legs being equally well lit — the symmetric appearance
+removes the cue that kept labels anchored on the Smitas clips.
+
+Required before per-side/asymmetry metrics can be trusted from any
+footage:
+
+1. **Add an automated leg-swap flag to Phase 1** — the sign test above
+   is cheap and decisive: fraction of frames on which
+   `sign(left_ankle_x - right_ankle_x)` equals its own median sign.
+   Genuine gait ~50-60%; swapped tracking >90%. Flag, and refuse
+   per-side/asymmetry output, above ~75-80%. A cadence sanity ceiling
+   (impossible `cadence_spm`) would have caught segA independently.
+2. Re-evaluate the pose backend against THIS clip class (small,
+   re-encoded, left-facing), not only the Smitas clips.
+3. Until then, treat per-side and asymmetry output from any new footage
+   as unvalidated regardless of visibility scores.

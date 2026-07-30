@@ -152,9 +152,14 @@ Results as of 2026-07-30 (full evidence: `scripts/phase0_validation.md`):
 
 - [x] Run `pose_skeleton_starter.py` on 3 real treadmill clips
 - [x] Watch each skeleton overlay in full; check limb-crossover frames
-      specifically for left/right leg swapping — no swap found; the
-      far-leg failure mode is landmark collapse onto the near leg, which
-      the visibility flag catches
+      specifically for left/right leg swapping — no swap found on the
+      Smitas clips; the far-leg failure mode there is landmark collapse
+      onto the near leg, which the visibility flag catches.
+      **2026-07-30: swap CONFIRMED on a fourth clip**
+      (`british_guy_treadmill.mp4`, small left-facing re-encode):
+      identity flips at essentially every crossover, labels track
+      front/rear roles, and no existing quality gate detects it — see
+      the addendum in `scripts/phase0_validation.md`
 - [x] Run `running_metrics.py`; manually count foot strikes in the video and
       compare to `steps_detected` — exact on 6flat (54/54) and 8flat
       (43/43); 5flat off by 2 (60 vs ~62, degraded final 3 s)
@@ -182,6 +187,19 @@ the console speed logged in filming notes at capture time.
 **If left/right leg assignment swaps at crossover, stop and fix that first.**
 It silently corrupts every per-side metric and every asymmetry number, and no
 amount of good downstream design survives it.
+
+**This gate is now TRIGGERED (2026-07-30).** The `british_guy_treadmill`
+clip swaps identity at every crossover while passing every existing
+quality gate (100% detection, both-side visibility 0.83+). Before
+trusting per-side output from any new footage: (1) add the sign-test
+swap flag to Phase 1 (fraction of frames where
+`sign(left_ankle_x - right_ankle_x)` equals its median sign; >~75-80%
+means labels are stuck to front/rear roles), plus a sanity ceiling on
+`cadence_spm`; (2) re-evaluate pose backends on this clip class, not
+only the Smitas clips — a first RTMPose A/B on the swap clip already
+shows it holding identity perfectly (40/40 sign balance, cadence within
+1 spm of manual on one segment) where MediaPipe swaps every crossover,
+though its contact-time calibration needs separate validation.
 
 ### Phase 1 — Pipeline orchestration
 
