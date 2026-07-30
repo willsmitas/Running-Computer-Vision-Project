@@ -46,8 +46,18 @@ python -m unittest discover -s tests -t .
 ## Status
 
 - Phases 1–5 are scaffolded and unit-tested against synthetic data.
-- **Phase 0 (validation on real treadmill clips) has NOT been done** — every
-  threshold and reference range is a provisional guess, and the left/right
-  leg-swap risk at limb crossover is unverified. Do not trust real-footage
-  output until Phase 0 passes (see BUILD_PLAN.md acceptance criteria).
+- **Phase 0 (validation on real treadmill clips) has been run — partial
+  pass, blocked on footage.** Full results in `scripts/phase0_validation.md`.
+  Manual ground-truth strike counts match `steps_detected` exactly on 2 of
+  3 clips and cadence is within 3 spm on all 3; no left/right leg swap was
+  found at limb crossover. Two hard blockers require a re-shoot before
+  Phase 0 can pass:
+  - The clip filenames are speed-REVERSED — belt-mark timing shows
+    `Smitas_5flat` is the fastest clip (~8 mph) and `Smitas_8flat` the
+    slowest (~5 mph). Do not feed the filename speeds to `interpret`.
+    (This also resolves the "cadence falls with speed" anomaly: against
+    actual speed, cadence rises normally.)
+  - The far (left) leg tracks below the visibility threshold in every
+    clip, so left-side and asymmetry metrics are unvalidated and
+    untrustworthy on this footage.
 - Phase 6 (UI) is deliberately last; everything is exercisable via CLI.
