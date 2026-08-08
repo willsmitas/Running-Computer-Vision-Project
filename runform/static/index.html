@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>runform</title>
+<style>
+/* ---- tokens (light) -------------------------------------------------- */
+:root {
+  color-scheme: light;
+  --page:      #f9f9f7;
+  --surface:   #fcfcfb;
+  --ink:       #0b0b0b;
+  --ink-2:     #52514e;
+  --muted:     #898781;
+  --grid:      #e1e0d9;
+  --baseline:  #c3c2b7;
+  --border:    rgba(11,11,11,0.10);
+  --accent:    #2a78d6;           /* categorical slot 1 */
+  --series-easy:     #2a78d6;     /* slot 1 blue  */
+  --series-moderate: #eb6834;     /* slot 2 orange */
+  --series-fast:     #1baf7a;     /* slot 3 aqua  */
+  --status-good:     #0ca30c;
+  --status-warn:     #fab219;
+  --status-serious:  #ec835a;
+  --status-critical: #d03b3b;
+  --good-text: #006300;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page:      #0d0d0d;
+    --surface:   #1a1a19;
+    --ink:       #ffffff;
+    --ink-2:     #c3c2b7;
+    --muted:     #898781;
+    --grid:      #2c2c2a;
+    --baseline:  #383835;
+    --border:    rgba(255,255,255,0.10);
+    --accent:    #3987e5;
+    --series-easy:     #3987e5;
+    --series-moderate: #d95926;
+    --series-fast:     #199e70;
+    --good-text: #0ca30c;
+  }
+}
+/* ---- base ------------------------------------------------------------ */
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1060px; margin: 0 auto; padding: 0 20px 80px; }
+h1 { font-size: 17px; font-weight: 650; margin: 0; letter-spacing: .2px; }
+h2 { font-size: 15px; font-weight: 650; margin: 0 0 10px; }
+h3 { font-size: 13px; font-weight: 650; margin: 0 0 8px; color: var(--ink-2);
+     text-transform: uppercase; letter-spacing: .6px; }
+a { color: var(--accent); }
+p.hint { color: var(--muted); font-size: 13px; margin: 6px 0; }
+
+header {
+  position: sticky; top: 0; z-index: 5; background: var(--page);
+  border-bottom: 1px solid var(--border);
+}
+.bar { max-width: 1060px; margin: 0 auto; padding: 12px 20px;
+       display: flex; align-items: center; gap: 18px; }
+.bar .logo { color: var(--accent); font-weight: 700; }
+nav a {
+  color: var(--ink-2); text-decoration: none; font-size: 14px;
+  padding: 4px 2px; border-bottom: 2px solid transparent;
+}
+nav a.active { color: var(--ink); border-bottom-color: var(--accent); }
+nav { display: flex; gap: 16px; flex: 1; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px 18px; margin: 16px 0;
+}
+.row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px;
+         color: var(--ink-2); }
+input, select, textarea {
+  background: var(--page); color: var(--ink);
+  border: 1px solid var(--baseline); border-radius: 6px;
+  padding: 6px 9px; font: inherit; font-size: 14px;
+}
+input[type=number] { width: 90px; }
+textarea { width: 100%; min-height: 54px; }
+button {
+  background: var(--accent); color: #fff; border: 0; border-radius: 7px;
+  padding: 7px 14px; font: inherit; font-size: 14px; font-weight: 600;
+  cursor: pointer;
+}
+button.ghost {
+  background: transparent; color: var(--ink); border: 1px solid var(--baseline);
+  font-weight: 500;
+}
+button:disabled { opacity: .45; cursor: default; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; font-weight: 600; border-radius: 999px;
+  padding: 2px 9px; border: 1px solid var(--border); color: var(--ink-2);
+  background: var(--page);
+}
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.chip.good     .dot { background: var(--status-good); }
+.chip.warn     .dot { background: var(--status-warn); }
+.chip.serious  .dot { background: var(--status-serious); }
+.chip.critical .dot { background: var(--status-critical); }
+.chip.neutral  .dot { background: var(--muted); }
+
+.banner {
+  border-left: 3px solid var(--status-warn); background: var(--surface);
+  border-radius: 8px; padding: 10px 14px; margin: 16px 0; font-size: 14px;
+  border-top: 1px solid var(--border); border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.banner.critical { border-left-color: var(--status-critical); }
+.banner.info { border-left-color: var(--accent); }
+
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th { text-align: left; color: var(--muted); font-weight: 600;
+     border-bottom: 1px solid var(--grid); padding: 6px 10px 6px 0; }
+td { border-bottom: 1px solid var(--grid); padding: 6px 10px 6px 0;
+     color: var(--ink-2); }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td:first-child { color: var(--ink); }
+tr:last-child td { border-bottom: 0; }
+
+.tiles { display: flex; gap: 12px; flex-wrap: wrap; margin: 10px 0; }
+.tile {
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px;
+  min-width: 130px; background: var(--page);
+}
+.tile .v { font-size: 22px; font-weight: 650; color: var(--ink); }
+.tile .l { font-size: 12px; color: var(--muted); }
+.tile .s { font-size: 12px; color: var(--ink-2); }
+
+.videos { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.videos figure { margin: 0; }
+.videos figcaption { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+video { width: 100%; border-radius: 8px; background: #000; display: block; }
+@media (max-width: 760px) { .videos { grid-template-columns: 1fr; } }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.tabs button {
+  background: transparent; color: var(--ink-2); border: 1px solid var(--baseline);
+  font-weight: 600; text-transform: capitalize;
+}
+.tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.progressbar { height: 8px; background: var(--grid); border-radius: 4px;
+               overflow: hidden; margin: 8px 0 4px; }
+.progressbar > div { height: 100%; background: var(--accent); width: 0%;
+                     transition: width .4s; border-radius: 4px; }
+
+.sessions-list .item {
+  display: flex; align-items: center; gap: 14px; padding: 12px 4px;
+  border-bottom: 1px solid var(--grid); cursor: pointer;
+}
+.sessions-list .item:last-child { border-bottom: 0; }
+.sessions-list .item:hover { background: var(--page); }
+.sessions-list .t { font-weight: 650; min-width: 92px; }
+.sessions-list .d { color: var(--muted); font-size: 13px; min-width: 90px; }
+.spread { flex: 1; }
+
+.cause {
+  border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 10px 14px; margin: 10px 0; background: var(--page);
+}
+.narrative { white-space: pre-wrap; font-size: 14.5px; color: var(--ink-2); }
+.disclaimer {
+  font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--grid);
+  margin-top: 14px; padding-top: 10px;
+}
+.meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.err { color: var(--status-critical); font-size: 13.5px; margin: 8px 0; }
+
+/* chart */
+.chart-wrap { position: relative; }
+.chart-tip {
+  position: absolute; pointer-events: none; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 7px; padding: 7px 10px;
+  font-size: 12.5px; box-shadow: 0 2px 10px rgba(0,0,0,.12); display: none;
+  min-width: 130px; z-index: 3;
+}
+.legend { display: flex; gap: 14px; font-size: 13px; color: var(--ink-2);
+          margin: 4px 0 8px; flex-wrap: wrap; }
+.legend .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block;
+              margin-right: 5px; vertical-align: -1px; }
+details.tblview summary { font-size: 13px; color: var(--muted); cursor: pointer;
+                          margin-top: 6px; }
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <h1><span class="logo">run</span>form</h1>
+  <nav>
+    <a href="#/" id="nav-sessions">Sessions</a>
+    <a href="#/progress" id="nav-progress">Progress</a>
+  </nav>
+  <span id="hdr-status" style="font-size:12.5px;color:var(--muted)"></span>
+</div></header>
+<main id="app"></main>
+
+<script>
+"use strict";
+/* runform Phase 6 UI. Thin client: all judgment lives server-side in the
+   deterministic layers; this file only renders payloads and posts actions. */
+
+const BANDS = ["easy", "moderate", "fast"];
+const BAND_COLOR = {
+  easy: "var(--series-easy)", moderate: "var(--series-moderate)",
+  fast: "var(--series-fast)",
+};
+const DISCLAIMER =
+  "This tool describes movement patterns measured from video. It is not " +
+  "medical advice and does not diagnose injury. Where injury risk is " +
+  "mentioned it is an association reported in the literature, not a " +
+  "prediction. If you feel pain while running, stop and consult a " +
+  "licensed medical professional.";
+
+let S = null;                 // last /api/state payload
+let activeBand = "easy";
+let pollTimer = null;
+
+const $ = (sel, el) => (el || document).querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  let body = null;
+  try { body = await res.json(); } catch (e) { /* non-JSON error */ }
+  if (!res.ok) throw new Error((body && body.error) || res.statusText);
+  return body;
+}
+const post = (path, body) => api(path, {
+  method: "POST", headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body || {}),
+});
+
+async function refresh() { S = await api("/api/state"); route(); }
+
+/* ---- formatting helpers ---------------------------------------------- */
+const fmt = (v, d = 1) =>
+  (v === null || v === undefined || Number.isNaN(v)) ? "–" : Number(v).toFixed(d);
+function msd(s, d = 1) {           // {mean, sd, n} -> "mean ± sd (n)"
+  if (!s || s.mean === null || s.mean === undefined) return "–";
+  return `${fmt(s.mean, d)} ± ${fmt(s.sd, d)} <span style="color:var(--muted)">(n=${s.n})</span>`;
+}
+const chip = (cls, text) =>
+  `<span class="chip ${cls}"><span class="dot"></span>${esc(text)}</span>`;
+const GRADE_CHIP = {
+  high: () => chip("good", "high confidence"),
+  low: () => chip("warn", "low confidence"),
+  unusable: () => chip("critical", "unusable"),
+};
+const VERDICT = {
+  improved_toward_range:  { cls: "good",     icon: "▲", label: "improved toward range" },
+  moved_away_from_range:  { cls: "serious",  icon: "▼", label: "moved away from range" },
+  changed_within_range:   { cls: "neutral",  icon: "◆", label: "changed (within range)" },
+  changed:                { cls: "neutral",  icon: "◆", label: "changed" },
+  no_measurable_change:   { cls: "neutral",  icon: "—", label: "no measurable change" },
+};
+
+function sessionByNumber(n) {
+  return (S.sessions || []).find(s => s.number === Number(n));
+}
+function latestPlan() {
+  for (let i = S.sessions.length - 1; i >= 0; i--)
+    if (S.sessions[i].plan) return { plan: S.sessions[i].plan, session: S.sessions[i] };
+  return null;
+}
+function runningJob(sessionN, label) {
+  return Object.values(S.jobs || {}).find(j =>
+    j.session === Number(sessionN) && j.label === label && j.status === "running");
+}
+
+/* Scalar value of a metric for one clip, for the progress chart.
+   Per-side metrics are side-averaged (matches the server's speed fits). */
+const CHART_METRICS = {
+  cadence_spm:                { label: "Cadence (spm)", d: 1, get: m => m.cadence_spm },
+  ground_contact_ms:          { label: "Ground contact (ms)", d: 0, get: m => sideAvg(m, "ground_contact_ms") },
+  knee_angle_at_strike_deg:   { label: "Knee angle at strike (°, interior)", d: 1, get: m => sideAvg(m, "knee_angle_at_strike_deg") },
+  overstride_ratio:           { label: "Overstride ratio", d: 3, get: m => sideAvg(m, "overstride_ratio") },
+  trunk_lean_deg:             { label: "Trunk lean (°)", d: 1, get: m => sideAvg(m, "trunk_lean_deg") },
+  vertical_oscillation_ratio: { label: "Vertical oscillation ratio", d: 3, get: m => m.vertical_oscillation_ratio },
+};
+function sideAvg(m, key) {
+  const vals = [];
+  for (const side of ["left", "right"]) {
+    const s = m.per_side && m.per_side[side] && m.per_side[side][key];
+    if (s && s.mean !== null && s.mean !== undefined) vals.push(s.mean);
+  }
+  return vals.length ? vals.reduce((a, b) => a + b) / vals.length : null;
+}
+
+/* ---- routing --------------------------------------------------------- */
+function route() {
+  const hash = location.hash || "#/";
+  $("#nav-sessions").classList.toggle("active", !hash.startsWith("#/progress"));
+  $("#nav-progress").classList.toggle("active", hash.startsWith("#/progress"));
+  const m = hash.match(/^#\/session\/(\d+)/);
+  if (m) renderSession(Number(m[1]));
+  else if (hash.startsWith("#/progress")) renderProgress();
+  else renderHome();
+  managePolling();
+}
+window.addEventListener("hashchange", route);
+
+function managePolling() {
+  const active = Object.values(S.jobs || {}).some(j => j.status === "running");
+  $("#hdr-status").textContent = active ? "analyzing…" : "";
+  if (active && !pollTimer)
+    pollTimer = setInterval(async () => { S = await api("/api/state"); route(); }, 1500);
+  if (!active && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+/* ---- home: profile/setup + session list ------------------------------ */
+function renderHome() {
+  const p = S.profile || {};
+  const setup = p.baseline_setup || {};
+  const speeds = p.speeds || {};
+  const lp = latestPlan();
+  const refilmDue = lp && lp.plan.recheck_due_date && lp.plan.recheck_due_date <= S.today;
+
+  let html = "";
+  if (refilmDue)
+    html += `<div class="banner">Re-film check is due (plan from session
+      ${lp.session.number}, due ${esc(lp.plan.recheck_due_date)}).
+      Film a new session with your baseline setup to measure what changed.</div>`;
+  if (!S.profile)
+    html += `<div class="banner info">First visit: save your profile and camera
+      setup below. The same setup and the same three speeds every session is
+      what makes sessions comparable.</div>`;
+
+  html += `<div class="card"><h2>Profile &amp; baseline setup</h2>
+    <p class="hint">Stored once, replayed at every session — setup drift
+    masquerades as form change.</p>
+    <div class="row">
+      <label class="field">Height (cm)
+        <input id="pf-height" type="number" step="0.5" value="${esc(p.height_cm ?? "")}"></label>
+      <label class="field">Experience
+        <select id="pf-exp">
+          ${["", "beginner", "recreational", "competitive"].map(x =>
+            `<option value="${x}" ${p.experience_level === x ? "selected" : ""}>${x || "—"}</option>`).join("")}
+        </select></label>
+      <label class="field">Camera distance (m)
+        <input id="pf-dist" type="number" step="0.1" value="${esc(setup.camera_distance_m ?? "")}"></label>
+      <label class="field">Camera height (cm)
+        <input id="pf-camh" type="number" step="1" value="${esc(setup.camera_height_cm ?? "")}"></label>
+      <label class="field">Orientation
+        <select id="pf-orient">
+          ${["landscape", "portrait"].map(x =>
+            `<option ${setup.orientation === x ? "selected" : ""}>${x}</option>`).join("")}
+        </select></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      ${BANDS.map(b => `<label class="field" style="text-transform:capitalize">${b} speed
+        <input id="pf-speed-${b}" type="number" step="0.1" value="${esc(speeds[b] ?? "")}"></label>`).join("")}
+      <label class="field">Unit
+        <select id="pf-unit">${["m/s", "km/h", "mph"].map(x =>
+          `<option ${p.speed_unit === x ? "selected" : ""}>${x}</option>`).join("")}
+        </select></label>
+      <button id="pf-save">Save profile</button>
+    </div>
+    <div class="err" id="pf-err"></div>
+  </div>`;
+
+  html += `<div class="card"><div class="row" style="justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Sessions</h2><button id="new-session">+ New session</button>
+    </div><div class="sessions-list">`;
+  if (!S.sessions.length)
+    html += `<p class="hint">No sessions yet. Create one, upload your three
+      treadmill clips (side view), and analyze.</p>`;
+  for (const s of [...S.sessions].reverse()) {
+    const nClips = Object.values(s.clips).filter(c => c.video).length;
+    const nAnalyzed = Object.values(s.clips).filter(c => c.metrics).length;
+    html += `<div class="item" onclick="location.hash='#/session/${s.number}'">
+      <span class="t">Session ${s.number}</span>
+      <span class="d">${esc((s.recorded_at || "").slice(0, 10))}</span>
+      <span class="spread"></span>
+      ${chip("neutral", `${nClips}/3 clips`)}
+      ${nAnalyzed ? chip("neutral", `${nAnalyzed} analyzed`) : ""}
+      ${s.assessment ? chip("good", "assessed") : ""}
+      ${s.plan ? chip("good", "plan") : ""}
+    </div>`;
+  }
+  html += `</div></div>`;
+  $("#app").innerHTML = html;
+
+  $("#pf-save").onclick = async () => {
+    try {
+      const speeds = {};
+      for (const b of BANDS) {
+        const v = $(`#pf-speed-${b}`).value;
+        if (v !== "") speeds[b] = Number(v);
+      }
+      await post("/api/profile", {
+        height_cm: $("#pf-height").value ? Number($("#pf-height").value) : null,
+        experience_level: $("#pf-exp").value || null,
+        baseline_setup: {
+          camera_distance_m: $("#pf-dist").value ? Number($("#pf-dist").value) : null,
+          camera_height_cm: $("#pf-camh").value ? Number($("#pf-camh").value) : null,
+          orientation: $("#pf-orient").value,
+        },
+        speeds, speed_unit: $("#pf-unit").value,
+      });
+      await refresh();
+    } catch (e) { $("#pf-err").textContent = e.message; }
+  };
+  $("#new-session").onclick = async () => {
+    const r = await post("/api/sessions", {});
+    await refresh();
+    location.hash = `#/session/${r.number}`;
+  };
+}
+
+/* ---- session detail -------------------------------------------------- */
+function renderSession(n) {
+  const s = sessionByNumber(n);
+  if (!s) { $("#app").innerHTML = `<p class="err">No session ${n}.</p>`; return; }
+  const p = S.profile || {};
+  const setup = p.baseline_setup || {};
+  const unit = p.speed_unit || "m/s";
+
+  let html = `<div style="margin-top:16px">
+    <a href="#/" style="font-size:13px">&larr; all sessions</a></div>
+    <div class="row" style="align-items:center;margin-top:6px">
+      <h2 style="margin:0">Session ${s.number}</h2>
+      <span style="color:var(--muted);font-size:13px">${esc((s.recorded_at || "").slice(0, 10))}</span>
+    </div>`;
+
+  /* setup replay — first-class, per BUILD_PLAN */
+  const hasSetup = setup.camera_distance_m || setup.camera_height_cm;
+  html += `<div class="card"><h3>Setup replay</h3>
+    ${hasSetup ? `<p style="margin:4px 0">Film exactly like session 1:
+      <b>${esc(setup.camera_distance_m ?? "?")} m</b> from the treadmill, lens at
+      <b>${esc(setup.camera_height_cm ?? "?")} cm</b>, <b>${esc(setup.orientation || "landscape")}</b>,
+      side view, whole body in frame.</p>`
+    : `<p class="hint">No baseline setup saved yet — record it on the
+      <a href="#/">home page</a> so future sessions can replay it.</p>`}
+    <label style="font-size:14px"><input type="checkbox" id="setup-ok"
+      ${s.setup_confirmed ? "checked" : ""}> I filmed with this setup</label>
+  </div>`;
+
+  /* notes */
+  html += `<div class="card"><h3>Session notes</h3>
+    <textarea id="sess-notes" placeholder="fatigue, shoes, anything unusual…">${esc(s.notes)}</textarea>
+    <div class="row" style="margin-top:8px"><button class="ghost" id="notes-save">Save notes</button>
+    <span class="err" id="notes-err"></span></div>
+    <p class="hint">Mention of pain routes the assessment to “see a licensed
+    professional” — by design.</p></div>`;
+
+  /* clip tabs */
+  html += `<div class="card"><h3>Clips — three speeds</h3>
+    <div class="tabs">${BANDS.map(b => {
+      const c = s.clips[b] || {};
+      const mark = c.metrics ? " ✓" : (c.video ? " ·" : "");
+      return `<button data-band="${b}" class="${b === activeBand ? "active" : ""}">${b}${mark}</button>`;
+    }).join("")}</div>
+    <div id="clip-pane">${clipPane(s, activeBand, unit)}</div></div>`;
+
+  /* assessment */
+  html += `<div class="card"><h3>Deterministic assessment</h3><div id="assess-pane">
+    ${assessPane(s)}</div></div>`;
+
+  /* AI narrative */
+  html += `<div class="card"><h3>AI analysis</h3><div id="narr-pane">
+    ${narrPane(s)}</div>
+    <div class="disclaimer">${esc(DISCLAIMER)}</div></div>`;
+
+  /* plan */
+  html += `<div class="card"><h3>Training plan</h3><div id="plan-pane">
+    ${planPane(s)}</div></div>`;
+
+  $("#app").innerHTML = html;
+  wireSession(s, unit);
+}
+
+function clipPane(s, band, unit) {
+  const c = s.clips[band] || {};
+  const job = runningJob(s.number, band);
+  const speedDefault = c.speed_value ?? ((S.profile || {}).speeds || {})[band] ?? "";
+  let html = "";
+
+  html += `<div class="row" style="margin-bottom:12px">
+    <label class="field">Treadmill speed (${esc(unit)})
+      <input id="clip-speed" type="number" step="0.1" value="${esc(speedDefault)}"></label>
+    <button class="ghost" id="clip-speed-save">Save speed</button>
+    <span class="spread"></span>
+    <label class="field">Video (side view)
+      <input id="clip-file" type="file" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v,.avi"></label>
+  </div>
+  <div class="err" id="clip-err"></div>
+  <div id="upl-progress"></div>`;
+
+  if (c.video) {
+    html += `<div class="videos">
+      <figure><figcaption>Original — ${esc(c.original_filename || c.video)}</figcaption>
+        <video id="vid-orig" src="${c.video_url}" controls muted playsinline></video></figure>
+      <figure><figcaption>Skeleton overlay${c.skeleton_url ? "" : " — not analyzed yet"}</figcaption>
+        ${c.skeleton_url
+          ? `<video id="vid-skel" src="${c.skeleton_url}" controls muted playsinline></video>`
+          : `<div style="border:1px dashed var(--baseline);border-radius:8px;height:180px;
+               display:flex;align-items:center;justify-content:center;color:var(--muted)">
+               run analysis to generate</div>`}</figure>
+    </div>`;
+    if (c.skeleton_url)
+      html += `<div class="row" style="margin-top:8px">
+        <button class="ghost" id="sync-play">▶ Play both in sync</button></div>`;
+
+    if (job) {
+      const pct = job.progress != null ? Math.round(job.progress * 100) : null;
+      html += `<div style="margin-top:12px">
+        <div style="font-size:13px;color:var(--ink-2)">
+          ${esc(job.stage || "working")}${job.frames_total
+            ? ` — frame ${job.frames_done}/${job.frames_total}` : ""}
+          ${pct !== null ? ` (${pct}%)` : ""}</div>
+        <div class="progressbar"><div style="width:${pct ?? 4}%"></div></div>
+        <p class="hint">Pose estimation runs on CPU and takes a while — leave
+        this page open or come back; it keeps running.</p></div>`;
+    } else {
+      html += `<div class="row" style="margin-top:12px">
+        <button id="clip-analyze">${c.metrics ? "Re-analyze" : "Analyze clip"}</button>
+        ${c.analyzed_at ? `<span class="meta">last analyzed ${esc(c.analyzed_at.slice(0, 10))}</span>` : ""}
+      </div>`;
+    }
+    const failedJob = Object.values(S.jobs || {}).find(j =>
+      j.session === s.number && j.label === band && j.status === "error");
+    if (failedJob && !c.metrics)
+      html += `<div class="err">Analysis failed: ${esc(failedJob.error)}</div>`;
+  } else {
+    html += `<p class="hint">Upload the ${band}-pace clip to begin. Treadmill,
+      side view, whole body in frame, same setup as your baseline.</p>`;
+  }
+
+  if (c.metrics) html += metricsPane(c);
+  return html;
+}
+
+function metricsPane(c) {
+  const m = c.metrics;
+  const flags = c.quality_flags || [];
+  let html = `<div style="margin-top:16px"><h3>Metrics</h3>`;
+  html += `<div class="row" style="margin-bottom:6px">
+    ${chip(c.detection_rate >= 0.8 ? "good" : "warn",
+           `detection ${(c.detection_rate * 100).toFixed(0)}%`)}
+    ${flags.map(f => chip("warn", f.replace(/_/g, " "))).join(" ")}
+    ${flags.length === 0 ? chip("good", "no quality flags") : ""}
+  </div>`;
+  html += `<div class="tiles">
+    <div class="tile"><div class="v">${fmt(m.cadence_spm, 1)}</div>
+      <div class="l">cadence (spm)</div></div>
+    <div class="tile"><div class="v">${m.steps_detected ?? "–"}</div>
+      <div class="l">foot strikes</div></div>
+    <div class="tile"><div class="v">${fmt(m.vertical_oscillation_ratio, 3)}</div>
+      <div class="l">vert. osc. / leg length</div></div>
+  </div>`;
+
+  const rows = [
+    ["Ground contact (ms)", "ground_contact_ms", 0],
+    ["Knee angle at strike (°, interior)", "knee_angle_at_strike_deg", 1],
+    ["Overstride ratio", "overstride_ratio", 3],
+    ["Trunk lean (°)", "trunk_lean_deg", 1],
+  ];
+  const asym = m.asymmetry_pct || {};
+  html += `<table><thead><tr><th>Per-side metric</th><th class="num">Left</th>
+    <th class="num">Right</th><th class="num">Asymmetry</th></tr></thead><tbody>`;
+  for (const [label, key, d] of rows) {
+    const L = m.per_side && m.per_side.left ? m.per_side.left[key] : null;
+    const R = m.per_side && m.per_side.right ? m.per_side.right[key] : null;
+    const a = asym[key];
+    html += `<tr><td>${label}</td><td class="num">${msd(L, d)}</td>
+      <td class="num">${msd(R, d)}</td>
+      <td class="num">${a != null ? fmt(a, 1) + "%" : "–"}</td></tr>`;
+  }
+  html += `</tbody></table>
+    <p class="hint">Values are mean ± SD over detected strides; SD and n say
+    whether the mean is usable. Knee angle is the interior angle
+    (straight leg = 180°).</p></div>`;
+  return html;
+}
+
+function assessPane(s) {
+  const a = s.assessment;
+  const anyAnalyzed = Object.values(s.clips).some(c => c.metrics);
+  let html = "";
+  if (!a) {
+    html += `<p class="hint">Reference comparison, confidence gating,
+      speed-profile fits, and root-cause ranking — all deterministic code, no
+      LLM involved.</p>
+      <button id="run-interpret" ${anyAnalyzed ? "" : "disabled"}>Run interpretation</button>
+      ${anyAnalyzed ? "" : `<p class="hint">Analyze at least one clip first.</p>`}
+      <div class="err" id="interp-err"></div>`;
+    return html;
+  }
+  if (a.session && a.session.pain_flag)
+    html += `<div class="banner critical"><b>Pain mentioned in your notes.</b>
+      Please see a licensed medical professional before acting on anything
+      below — this tool does not assess injuries.</div>`;
+
+  const causes = a.root_causes || [];
+  if (!causes.length)
+    html += `<p style="color:var(--good-text);font-weight:600">No high-confidence
+      form faults detected at these speeds.</p>`;
+  for (const c of causes) {
+    html += `<div class="cause"><div class="row" style="align-items:center">
+      <b>${esc(c.label || c.cause)}</b>
+      ${GRADE_CHIP[c.confidence] ? GRADE_CHIP[c.confidence]() : chip("neutral", esc(c.confidence))}
+      ${c.speed_classification ? chip("neutral", esc(String(c.speed_classification).replace(/_/g, " "))) : ""}
+    </div>
+    <div class="meta">supported by: ${esc((c.metrics || []).join(", "))}</div></div>`;
+  }
+
+  const devs = a.deviations || [];
+  if (devs.length) {
+    html += `<h3 style="margin-top:14px">Out-of-range metrics</h3>
+    <table><thead><tr><th>Metric</th><th>Side</th><th>Pace</th>
+      <th class="num">Value</th><th class="num">Expected</th><th>Confidence</th></tr></thead><tbody>`;
+    for (const d of devs) {
+      html += `<tr><td>${esc(d.metric)}${d.submetric ? " · " + esc(d.submetric) : ""}</td>
+        <td>${esc(d.side || "–")}</td><td>${esc(d.speed_label)}</td>
+        <td class="num">${fmt(d.value, 3)}</td>
+        <td class="num">${fmt(d.expected[0], 2)}–${fmt(d.expected[1], 2)}</td>
+        <td>${GRADE_CHIP[d.grade] ? GRADE_CHIP[d.grade]() : esc(d.grade)}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+
+  const excl = a.excluded_metrics || [];
+  if (excl.length)
+    html += `<p class="hint" style="margin-top:10px">Excluded as unusable
+      (insufficient strides, spread, or tracking): ${esc([...new Set(
+        excl.map(e => `${e.metric}${e.speed_label ? " @" + e.speed_label : ""}`))].join(", "))}.
+      Excluded honestly rather than silently used.</p>`;
+
+  const cls = (a.speed_profile || {}).classifications || {};
+  if (Object.keys(cls).length) {
+    html += `<h3 style="margin-top:14px">Response to speed</h3><table><tbody>`;
+    for (const [metric, klass] of Object.entries(cls))
+      html += `<tr><td>${esc(metric)}</td><td>${esc(String(klass).replace(/_/g, " "))}</td></tr>`;
+    html += `</tbody></table>`;
+  }
+  html += `<div class="row" style="margin-top:12px">
+    <button class="ghost" id="run-interpret">Re-run interpretation</button>
+    <div class="err" id="interp-err"></div></div>`;
+  return html;
+}
+
+function narrPane(s) {
+  const narr = s.assessment && s.assessment.narrative;
+  let html = "";
+  if (!s.assessment)
+    return `<p class="hint">Run the deterministic assessment first — the LLM
+      only writes prose on top of it (it never detects, judges, or does
+      arithmetic).</p>`;
+  if (narr) {
+    html += `<div class="narrative">${esc(narr.narrative)}</div>
+      <div class="meta">model ${esc(narr.model_name)} · prompt
+      ${esc(narr.prompt_version)} · ${narr.attempts} attempt(s)</div>`;
+  }
+  html += `<div class="row" style="margin-top:10px">
+    <label class="field">Ollama model
+      <input id="narr-model" value="llama3.1:8b" style="width:150px"></label>
+    <button id="run-narrate">${narr ? "Regenerate" : "Generate narrative"}</button>
+    <span id="narr-busy" class="meta" style="display:none">writing…</span>
+  </div><div class="err" id="narr-err"></div>`;
+  if (!narr)
+    html += `<p class="hint">Runs locally via Ollama — free, no API. Make sure
+      <code>ollama serve</code> is running.</p>`;
+  return html;
+}
+
+function planPane(s) {
+  const plan = s.plan;
+  let html = "";
+  if (!s.assessment)
+    return `<p class="hint">The plan is built from the assessment's root
+      causes — run interpretation first.</p>`;
+  if (!plan) {
+    return `<button id="run-plan">Build plan</button>
+      <p class="hint">Every drill targets a root cause; every plan carries
+      falsifiable success criteria.</p>
+      <div class="err" id="plan-err"></div>`;
+  }
+  html += `<p style="margin:4px 0 10px">${plan.duration_weeks} weeks · re-film
+    check due <b>${esc(plan.recheck_due_date)}</b></p>`;
+  for (const it of plan.items || []) {
+    html += `<div class="cause" style="border-left-color:var(--series-fast)">
+      <b>${esc(it.name || it.drill)}</b>
+      <div style="font-size:14px;margin:2px 0">Cue: “${esc(it.cue)}”</div>
+      <div class="meta">${esc(it.dosage)} · ${it.frequency_per_week}×/week ·
+        targets ${esc(it.targets_root_cause)}</div></div>`;
+  }
+  const crits = plan.success_criteria || [];
+  if (crits.length) {
+    html += `<h3 style="margin-top:12px">Success criteria</h3>
+      <table><thead><tr><th>Metric</th><th>Direction</th>
+      <th class="num">Target Δ</th><th class="num">Baseline</th><th>By week</th></tr></thead><tbody>`;
+    for (const c of crits)
+      html += `<tr><td>${esc(c.metric)}${c.speed_label ? " @" + esc(c.speed_label) : ""}</td>
+        <td>${esc(c.direction)}</td><td class="num">${fmt(c.target_delta, 3)}</td>
+        <td class="num">${fmt(c.baseline, 2)}</td><td>${c.by_week ?? "–"}</td></tr>`;
+    html += `</tbody></table>`;
+  }
+  html += `<div class="row" style="margin-top:12px">
+    <button class="ghost" id="run-plan">Rebuild plan</button>
+    <div class="err" id="plan-err"></div></div>`;
+  return html;
+}
+
+function wireSession(s, unit) {
+  $("#setup-ok").onchange = e =>
+    post(`/api/sessions/${s.number}/update`, { setup_confirmed: e.target.checked });
+  $("#notes-save").onclick = async () => {
+    try {
+      await post(`/api/sessions/${s.number}/update`, { notes: $("#sess-notes").value });
+      $("#notes-err").textContent = "";
+      $("#notes-err").style.color = "var(--good-text)";
+      $("#notes-err").textContent = "saved";
+      setTimeout(() => { $("#notes-err").textContent = ""; }, 1500);
+    } catch (e) { $("#notes-err").textContent = e.message; }
+  };
+  for (const btn of document.querySelectorAll(".tabs button"))
+    btn.onclick = () => { activeBand = btn.dataset.band; renderSession(s.number); };
+
+  const speedSave = $("#clip-speed-save");
+  if (speedSave) speedSave.onclick = async () => {
+    try {
+      await post(`/api/sessions/${s.number}/update`, {
+        clips: { [activeBand]: {
+          speed_value: Number($("#clip-speed").value), speed_unit: unit } } });
+      await refresh();
+    } catch (e) { $("#clip-err").textContent = e.message; }
+  };
+
+  const file = $("#clip-file");
+  if (file) file.onchange = async () => {
+    const f = file.files[0];
+    if (!f) return;
+    $("#upl-progress").innerHTML =
+      `<div class="progressbar"><div style="width:30%"></div></div>
+       <p class="hint">uploading ${esc(f.name)}…</p>`;
+    try {
+      await api(`/api/sessions/${s.number}/upload?label=${activeBand}` +
+                `&filename=${encodeURIComponent(f.name)}`,
+                { method: "POST", body: f });
+      // keep any speed already typed
+      const sp = $("#clip-speed").value;
+      if (sp) await post(`/api/sessions/${s.number}/update`,
+        { clips: { [activeBand]: { speed_value: Number(sp), speed_unit: unit } } });
+      await refresh();
+    } catch (e) {
+      $("#upl-progress").innerHTML = "";
+      $("#clip-err").textContent = e.message;
+    }
+  };
+
+  const analyze = $("#clip-analyze");
+  if (analyze) analyze.onclick = async () => {
+    try {
+      const sp = $("#clip-speed").value;
+      if (sp) await post(`/api/sessions/${s.number}/update`,
+        { clips: { [activeBand]: { speed_value: Number(sp), speed_unit: unit } } });
+      await post(`/api/sessions/${s.number}/analyze`, { label: activeBand });
+      await refresh();
+    } catch (e) { $("#clip-err").textContent = e.message; }
+  };
+
+  const sync = $("#sync-play");
+  if (sync) sync.onclick = () => {
+    const a = $("#vid-orig"), b = $("#vid-skel");
+    if (!a || !b) return;
+    if (a.paused) { b.currentTime = a.currentTime; a.play(); b.play(); sync.textContent = "❚❚ Pause both"; }
+    else { a.pause(); b.pause(); sync.textContent = "▶ Play both in sync"; }
+  };
+
+  const interp = $("#run-interpret");
+  if (interp) interp.onclick = async () => {
+    interp.disabled = true;
+    try { await post(`/api/sessions/${s.number}/interpret`); await refresh(); }
+    catch (e) { $("#interp-err").textContent = e.message; interp.disabled = false; }
+  };
+  const narr = $("#run-narrate");
+  if (narr) narr.onclick = async () => {
+    narr.disabled = true; $("#narr-busy").style.display = "";
+    try {
+      await post(`/api/sessions/${s.number}/narrate`,
+                 { model: $("#narr-model").value });
+      await refresh();
+    } catch (e) {
+      $("#narr-err").textContent = e.message;
+      narr.disabled = false; $("#narr-busy").style.display = "none";
+    }
+  };
+  const planBtn = $("#run-plan");
+  if (planBtn) planBtn.onclick = async () => {
+    planBtn.disabled = true;
+    try { await post(`/api/sessions/${s.number}/plan`); await refresh(); }
+    catch (e) { $("#plan-err").textContent = e.message; planBtn.disabled = false; }
+  };
+}
+
+/* ---- progress / comparison view -------------------------------------- */
+let chartMetric = "cadence_spm";
+
+function renderProgress() {
+  const assessed = S.sessions.filter(s => s.assessment);
+  const nums = S.sessions.map(s => s.number);
+  const defaultAfter = assessed.length ? assessed[assessed.length - 1].number : "";
+  const defaultBefore = assessed.length > 1 ? assessed[assessed.length - 2].number : "";
+
+  let html = `<div class="card"><h2>Progress across sessions</h2>
+    <p class="hint">Change detection is the trustworthy signal here — absolute
+    values carry systematic error that cancels between same-setup sessions.</p>
+    <div class="row">
+      <label class="field">Metric
+        <select id="chart-metric">${Object.entries(CHART_METRICS).map(([k, v]) =>
+          `<option value="${k}" ${k === chartMetric ? "selected" : ""}>${v.label}</option>`).join("")}
+        </select></label>
+    </div>
+    <div id="chart-area"></div>
+  </div>`;
+
+  html += `<div class="card"><h2>Compare two sessions</h2>
+    <div class="row">
+      <label class="field">Before
+        <select id="cmp-before">${nums.map(n =>
+          `<option ${n === defaultBefore ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+      <label class="field">After
+        <select id="cmp-after">${nums.map(n =>
+          `<option ${n === defaultAfter ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+      <button id="cmp-go">Compare</button>
+      <div class="err" id="cmp-err"></div>
+    </div>
+    <div id="cmp-result"></div>
+  </div>`;
+
+  $("#app").innerHTML = html;
+  drawChart();
+  $("#chart-metric").onchange = e => { chartMetric = e.target.value; drawChart(); };
+  $("#cmp-go").onclick = runCompare;
+  if (defaultBefore && defaultAfter && defaultBefore !== defaultAfter) runCompare();
+}
+
+async function runCompare() {
+  const before = $("#cmp-before").value, after = $("#cmp-after").value;
+  $("#cmp-err").textContent = "";
+  if (before === after) { $("#cmp-err").textContent = "Pick two different sessions."; return; }
+  let r;
+  try { r = await api(`/api/compare?before=${before}&after=${after}`); }
+  catch (e) { $("#cmp-err").textContent = e.message; return; }
+
+  let html = "";
+  for (const d of r.setup_drift || [])
+    html += `<div class="banner"><b>${esc(d.kind === "scale_change" ?
+      "Setup drift" : "Speed mismatch")} @ ${esc(d.speed_label)}:</b>
+      ${esc(d.note)}</div>`;
+
+  const vc = r.verdict_counts || {};
+  const sig = (r.metric_deltas || []).filter(d => d.significant).length;
+  html += `<p style="margin:10px 0 4px">${sig
+    ? `<b>${sig}</b> metric${sig > 1 ? "s" : ""} changed beyond the noise floor.`
+    : `<b>No measurable change</b> beyond within-session noise. That is a
+       real answer — keep going and re-film after the plan window.`}</p>
+    <div class="row" style="margin-bottom:8px">${Object.entries(vc).map(([k, n]) => {
+      const v = VERDICT[k] || VERDICT.changed;
+      return chip(v.cls, `${v.icon} ${n} ${v.label}`);
+    }).join(" ")}</div>`;
+
+  html += `<table><thead><tr><th>Metric</th><th>Pace</th>
+    <th class="num">Before</th><th class="num">After</th><th class="num">Δ</th>
+    <th class="num">Noise floor</th><th>Verdict</th></tr></thead><tbody>`;
+  const deltas = [...(r.metric_deltas || [])].sort((a, b) =>
+    (b.significant - a.significant) || Math.abs(b.delta) - Math.abs(a.delta));
+  for (const d of deltas) {
+    const v = VERDICT[d.verdict] || VERDICT.changed;
+    html += `<tr style="${d.significant ? "" : "opacity:.62"}">
+      <td>${esc(d.metric)}${d.side ? " · " + esc(d.side) : ""}</td>
+      <td>${esc(d.speed_label)}</td>
+      <td class="num">${fmt(d.before, 2)}</td><td class="num">${fmt(d.after, 2)}</td>
+      <td class="num">${d.delta > 0 ? "+" : ""}${fmt(d.delta, 2)}</td>
+      <td class="num">${fmt(d.noise_floor, 2)}</td>
+      <td>${chip(v.cls, v.icon + " " + v.label)}</td></tr>`;
+  }
+  html += `</tbody></table>
+    <p class="hint">A delta below the within-session noise floor (SD across
+    strides) is not a result and is never reported as one.</p>`;
+  $("#cmp-result").innerHTML = html;
+}
+
+/* Line chart: one metric across sessions, one series per pace band.
+   Bands use categorical slots 1–3 (all-pairs CVD-validated trio). */
+function drawChart() {
+  const spec = CHART_METRICS[chartMetric];
+  const series = {};      // band -> [{x: session number, y}]
+  for (const s of S.sessions)
+    for (const band of BANDS) {
+      const c = s.clips[band];
+      if (!c || !c.metrics) continue;
+      const y = spec.get(c.metrics);
+      if (y === null || y === undefined) continue;
+      (series[band] = series[band] || []).push({ x: s.number, y });
+    }
+  const bands = BANDS.filter(b => series[b] && series[b].length);
+  const area = $("#chart-area");
+  if (!bands.length) {
+    area.innerHTML = `<p class="hint">No analyzed clips yet — the chart fills
+      in as sessions are analyzed.</p>`;
+    return;
+  }
+
+  const W = 640, H = 240, M = { t: 14, r: 110, b: 30, l: 48 };
+  const xs = [...new Set(S.sessions.filter(s =>
+    bands.some(b => (series[b] || []).some(p => p.x === s.number))
+  ).map(s => s.number))].sort((a, b) => a - b);
+  const ys = bands.flatMap(b => series[b].map(p => p.y));
+  let yMin = Math.min(...ys), yMax = Math.max(...ys);
+  if (yMin === yMax) { yMin -= 1; yMax += 1; }
+  const pad = (yMax - yMin) * 0.12;
+  yMin -= pad; yMax += pad;
+  const X = x => xs.length === 1 ? (M.l + (W - M.l - M.r) / 2)
+    : M.l + (x - xs[0]) / (xs[xs.length - 1] - xs[0]) * (W - M.l - M.r);
+  const Y = y => M.t + (1 - (y - yMin) / (yMax - yMin)) * (H - M.t - M.b);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px" role="img"
+    aria-label="${esc(spec.label)} across sessions">`;
+  const nTicks = 4;
+  for (let i = 0; i <= nTicks; i++) {
+    const yv = yMin + (i / nTicks) * (yMax - yMin);
+    svg += `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(yv)}" y2="${Y(yv)}"
+      stroke="var(--grid)" stroke-width="1"/>
+      <text x="${M.l - 8}" y="${Y(yv) + 4}" text-anchor="end" font-size="11"
+      fill="var(--muted)">${fmt(yv, spec.d)}</text>`;
+  }
+  for (const x of xs)
+    svg += `<text x="${X(x)}" y="${H - 8}" text-anchor="middle" font-size="11"
+      fill="var(--muted)">S${x}</text>`;
+  svg += `<line x1="${M.l}" x2="${W - M.r}" y1="${H - M.b}" y2="${H - M.b}"
+    stroke="var(--baseline)" stroke-width="1"/>`;
+
+  for (const band of bands) {
+    const pts = series[band].sort((a, b) => a.x - b.x);
+    const col = BAND_COLOR[band];
+    if (pts.length > 1)
+      svg += `<polyline fill="none" stroke="${col}" stroke-width="2"
+        points="${pts.map(p => `${X(p.x)},${Y(p.y)}`).join(" ")}"/>`;
+    for (const p of pts)
+      svg += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="4" fill="${col}"
+        stroke="var(--surface)" stroke-width="2"
+        data-band="${band}" data-x="${p.x}" data-y="${p.y}"/>`;
+    const last = pts[pts.length - 1];
+    svg += `<text x="${X(last.x) + 10}" y="${Y(last.y) + 4}" font-size="12"
+      fill="var(--ink-2)" font-weight="600">${band}</text>`;
+  }
+  svg += `</svg>`;
+
+  let html = `<div class="legend">${bands.map(b =>
+    `<span><span class="sw" style="background:${BAND_COLOR[b]}"></span>${b}</span>`).join("")}
+    </div>
+    <div class="chart-wrap">${svg}<div class="chart-tip" id="chart-tip"></div></div>`;
+
+  /* table view — identity never by color alone */
+  html += `<details class="tblview"><summary>Table view</summary>
+    <table style="margin-top:6px"><thead><tr><th>Session</th>${bands.map(b =>
+      `<th class="num" style="text-transform:capitalize">${b}</th>`).join("")}
+    </tr></thead><tbody>`;
+  for (const x of xs)
+    html += `<tr><td>S${x}</td>${bands.map(b => {
+      const p = (series[b] || []).find(p => p.x === x);
+      return `<td class="num">${p ? fmt(p.y, spec.d) : "–"}</td>`;
+    }).join("")}</tr>`;
+  html += `</tbody></table></details>`;
+
+  area.innerHTML = html;
+
+  const tip = $("#chart-tip"), wrap = $(".chart-wrap");
+  area.querySelectorAll("circle").forEach(c => {
+    c.addEventListener("mouseenter", ev => {
+      const r = wrap.getBoundingClientRect();
+      tip.innerHTML = `<b style="text-transform:capitalize">${c.dataset.band}</b>
+        · session ${c.dataset.x}<br>${esc(spec.label)}:
+        <b>${fmt(Number(c.dataset.y), spec.d)}</b>`;
+      tip.style.display = "block";
+      tip.style.left = Math.min(ev.clientX - r.left + 12, r.width - 150) + "px";
+      tip.style.top = (ev.clientY - r.top - 10) + "px";
+    });
+    c.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+  });
+}
+
+/* ---- boot ------------------------------------------------------------ */
+refresh().catch(e => {
+  $("#app").innerHTML = `<p class="err">Could not reach the runform server:
+    ${esc(e.message)}</p>`;
+});
+</script>
+</body>
+</html>

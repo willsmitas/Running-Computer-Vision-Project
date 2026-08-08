@@ -8,6 +8,7 @@ the terminal long before any UI exists (Phase 6 is deliberately last):
     narrate    Phase 3  assessment -> LLM narrative (local Ollama)
     plan       Phase 4  assessment -> drill plan with success criteria
     compare    Phase 5  two assessments -> deltas with significance gate
+    ui         Phase 6  local web UI over all of the above
 """
 
 import argparse
@@ -113,6 +114,13 @@ def cmd_compare(args):
     _emit(result, args.out)
 
 
+def cmd_ui(args):
+    from .webui import run
+
+    run(host=args.host, port=args.port, root=args.data_root,
+        open_browser=not args.no_browser)
+
+
 def build_parser():
     p = argparse.ArgumentParser(
         prog="runform",
@@ -159,6 +167,13 @@ def build_parser():
     c.add_argument("after")
     c.add_argument("--out", default=None)
     c.set_defaults(func=cmd_compare)
+
+    u = sub.add_parser("ui", help="local web UI: capture, results, narrative, plan, progress")
+    u.add_argument("--host", default="127.0.0.1")
+    u.add_argument("--port", type=int, default=8177)
+    u.add_argument("--data-root", default="data", help="storage root (default: ./data)")
+    u.add_argument("--no-browser", action="store_true", help="don't auto-open the browser")
+    u.set_defaults(func=cmd_ui)
 
     return p
 
