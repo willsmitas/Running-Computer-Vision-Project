@@ -215,10 +215,15 @@ def extract_pose(
     mode: str = "balanced",
     device: str = "cpu",
     progress_every: int = 50,
+    progress_cb=None,
 ) -> PoseExtraction:
     """Run pose estimation over a video. Writes the skeleton overlay video
     and the landmarks CSV next to the input (or into out_dir) and returns
     a PoseExtraction. Raises VideoError on unreadable/empty input.
+
+    progress_cb, if given, is called as progress_cb(frames_done, total)
+    every few frames; total is None when the container does not report a
+    frame count.
 
     Every frame is detected independently — no ROI or identity carried
     over between frames. Per-frame detection was validated (on both
@@ -243,6 +248,9 @@ def extract_pose(
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    # Container-reported frame count; unreliable in general, but good
+    # enough for a progress fraction (never used for metrics).
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or None
 
     stem = os.path.splitext(os.path.basename(input_path))[0]
     dest = out_dir if out_dir else (os.path.dirname(input_path) or ".")
@@ -250,8 +258,19 @@ def extract_pose(
     out_video_path = os.path.join(dest, stem + "_skeleton.mp4")
     out_csv_path = os.path.join(dest, stem + "_landmarks.csv")
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(out_video_path, fourcc, fps, (width, height))
+    # H.264 ("avc1") first: browsers can decode it, so the skeleton video
+    # is directly playable in the web UI. mp4v as fallback for machines
+    # with no H.264 encoder (plays in desktop players, not in <video>).
+    writer = None
+    for fourcc_code in ("avc1", "mp4v"):
+        writer = cv2.VideoWriter(
+            out_video_path, cv2.VideoWriter_fourcc(*fourcc_code), fps, (width, height)
+        )
+        if writer.isOpened():
+            break
+    if writer is None or not writer.isOpened():
+        cap.release()
+        raise VideoError(f"Could not open a video writer for: {out_video_path}")
 
     csv_file = open(out_csv_path, "w", newline="")
     csv_writer = csv.writer(csv_file)
@@ -292,6 +311,8 @@ def extract_pose(
             frame_idx += 1
             if progress_every and frame_idx % progress_every == 0:
                 print(f"  ...{frame_idx} frames processed", flush=True)
+            if progress_cb is not None and frame_idx % 5 == 0:
+                progress_cb(frame_idx, total_frames)
     finally:
         cap.release()
         writer.release()

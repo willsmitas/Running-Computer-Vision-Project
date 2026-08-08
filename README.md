@@ -35,7 +35,15 @@ python -m runform interpret --clip easy_metrics.json easy 2.6 ^
 python -m runform narrate assessment.json           # needs Ollama
 python -m runform plan assessment.json
 python -m runform compare before.json after.json
+python -m runform ui                                # local web UI over all of the above
 ```
+
+The `ui` command serves a local single-page app (default
+http://127.0.0.1:8177, stdlib only — no new dependencies): upload the
+three clips per session, watch original + skeleton video side by side,
+see metrics, the deterministic assessment, the Ollama narrative, the
+drill plan, and session-over-session comparison with the significance
+gate. Session data lives under `./data/` as plain JSON + artifacts.
 
 `pose_skeleton_starter.py` and `running_metrics.py` remain as thin shims
 for the original single-script workflows.

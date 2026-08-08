@@ -77,12 +77,16 @@ def _key_joint_visibility(csv_path):
     return out
 
 
-def analyze_clip(video_path, out_dir=None, mode="balanced", device="cpu", smooth=9):
+def analyze_clip(video_path, out_dir=None, mode="balanced", device="cpu", smooth=9,
+                 progress_cb=None):
     """Raw clip -> all artifacts + quality report.
 
     Returns a dict with artifact paths, video properties, quality flags,
     and the metrics. Raises VideoError / PoseQualityError / MetricsError
     with an informative message instead of producing partial junk.
+
+    progress_cb(frames_done, total_or_None) reports pose-estimation
+    progress (the slow stage) — used by the web UI.
     """
     if not os.path.exists(video_path):
         raise VideoError(f"Video not found: {video_path}")
@@ -91,7 +95,8 @@ def analyze_clip(video_path, out_dir=None, mode="balanced", device="cpu", smooth
     # needs them.
     from .pose import extract_pose
 
-    ex = extract_pose(video_path, out_dir=out_dir, mode=mode, device=device)
+    ex = extract_pose(video_path, out_dir=out_dir, mode=mode, device=device,
+                      progress_cb=progress_cb)
     duration_s = ex.frames / ex.fps if ex.fps else 0.0
 
     if ex.detection_rate < HARD_MIN_DETECTION_RATE:
