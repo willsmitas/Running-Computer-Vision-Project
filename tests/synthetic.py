@@ -7,9 +7,10 @@ Two levels:
   - metrics_payload(): a metrics dict with chosen values, for unit-testing
     the Phase 2+ layers (gating, root causes, comparison) directly.
 
-Synthetic tests validate logic, NOT real-world behavior — the known open
-risk (pose-backend left/right leg swap at crossover) is untouched by any of
-this and remains a Phase 0 gate on real footage.
+Synthetic tests validate logic, NOT real-world behavior. swap_front_rear()
+reproduces the shape of the leg-swap failure seen on real footage, but
+whether runform.leg_identity repairs REAL swaps must still be checked on
+real clips (Phase 0 gate).
 """
 
 import numpy as np
@@ -91,6 +92,36 @@ def make_gait_frames(
 
     missing = [j for j in REQUIRED if f"{j}_x" not in df.columns]
     assert not missing, f"synthetic generator missing joints: {missing}"
+    return df
+
+
+LEG_CHAIN = ("knee", "ankle", "heel", "foot_index")
+
+
+def _chain_cols(side):
+    return [f"{side}_{j}_{a}" for j in LEG_CHAIN for a in ("x", "y", "z", "vis")]
+
+
+def swap_front_rear(df, direction=1):
+    """Apply the leg-identity failure seen on real footage: the "left"
+    label always sits on whichever foot is in FRONT, so identity flips at
+    every crossover (scripts/phase0_validation.md addendum)."""
+    df = df.copy()
+    rel = ((df["left_ankle_x"] - df["right_ankle_x"]) * direction).to_numpy()
+    behind = rel < 0
+    L = df[_chain_cols("left")].to_numpy().copy()
+    R = df[_chain_cols("right")].to_numpy().copy()
+    df.loc[behind, _chain_cols("left")] = R[behind]
+    df.loc[behind, _chain_cols("right")] = L[behind]
+    return df
+
+
+def blind(df, sides, start, end, vis=0.1):
+    """Drop a leg's whole chain below visibility for frames start..end."""
+    df = df.copy()
+    for side in sides:
+        for j in LEG_CHAIN:
+            df.loc[start:end, f"{side}_{j}_vis"] = vis
     return df
 
 

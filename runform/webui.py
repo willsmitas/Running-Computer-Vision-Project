@@ -24,7 +24,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from .errors import RunFormError
 from .references import SPEED_BANDS
@@ -73,26 +73,38 @@ def _run_analysis(job_id, video_path, session_dir, label, smooth, mode):
         _job_update(job_id, stage="pose estimation")
         result = analyze_clip(video_path, out_dir=session_dir,
                               mode=mode, smooth=smooth, progress_cb=cb)
-        with _state_lock:
-            sess = _load_session_json(session_dir)
-            clip = sess["clips"].setdefault(label, {})
-            clip.update({
-                "analyzed_at": _now_iso(),
-                "skeleton_video": os.path.basename(result["skeleton_video_path"]),
-                "landmarks_csv": os.path.basename(result["landmarks_csv_path"]),
-                "metrics_json": os.path.basename(result["metrics_json_path"]),
-                "quality_json": os.path.basename(result["quality_json_path"]),
-                "detection_rate": result["detection_rate"],
-                "quality_flags": result["quality_flags"],
-                "fps": result["fps"], "width": result["width"],
-                "height": result["height"], "duration_s": result["duration_s"],
-            })
-            _save_session_json(session_dir, sess)
+        _record_result(session_dir, label, result)
         _job_update(job_id, status="done", progress=1.0,
                     quality_flags=result["quality_flags"],
                     detection_rate=result["detection_rate"])
     except Exception as e:  # surfaced verbatim in the UI — fail loudly
         _job_update(job_id, status="error", error=str(e))
+
+
+def _record_result(session_dir, label, result):
+    """Write one clip's analysis facts into session.json (shared by a
+    fresh analysis and a leg-identity re-seed)."""
+    ident = result["leg_identity"]
+    with _state_lock:
+        sess = _load_session_json(session_dir)
+        clip = sess["clips"].setdefault(label, {})
+        clip.update({
+            "analyzed_at": _now_iso(),
+            "skeleton_video": os.path.basename(result["skeleton_video_path"]),
+            "landmarks_csv": os.path.basename(result["landmarks_csv_path"]),
+            "tracked_landmarks_csv": os.path.basename(result["tracked_landmarks_csv_path"]),
+            "metrics_json": os.path.basename(result["metrics_json_path"]),
+            "quality_json": os.path.basename(result["quality_json_path"]),
+            "seed_image": (os.path.basename(result["seed_image_path"])
+                           if result.get("seed_image_path") else None),
+            "leg_identity": {k: ident[k] for k in (
+                "seed_frame", "swap_seed", "swaps_corrected", "labeled_fraction")},
+            "detection_rate": result["detection_rate"],
+            "quality_flags": result["quality_flags"],
+            "fps": result["fps"], "width": result["width"],
+            "height": result["height"], "duration_s": result["duration_s"],
+        })
+        _save_session_json(session_dir, sess)
 
 
 def _load_session_json(session_dir):
@@ -134,8 +146,13 @@ class Api:
         out = dict(entry)
         if entry.get("video"):
             out["video_url"] = f"/media/{rel}/{entry['video']}"
+        # Media is served cacheable; re-seeding rewrites the overlay and
+        # seed image in place, so version the URL by analysis time.
+        ver = quote(entry.get("analyzed_at") or "")
         if entry.get("skeleton_video"):
-            out["skeleton_url"] = f"/media/{rel}/{entry['skeleton_video']}"
+            out["skeleton_url"] = f"/media/{rel}/{entry['skeleton_video']}?v={ver}"
+        if entry.get("seed_image"):
+            out["seed_url"] = f"/media/{rel}/{entry['seed_image']}?v={ver}"
         mpath = os.path.join(session_dir, entry.get("metrics_json") or "")
         if entry.get("metrics_json") and os.path.exists(mpath):
             out["metrics"] = Store.load_json(mpath)
@@ -317,6 +334,27 @@ class Api:
         )
         t.start()
         return {"job_id": job_id}
+
+    def set_seed(self, number, body):
+        """Runner's verdict on the seed frame: swap=True means the red
+        (LEFT) dot is on their right foot. Re-runs leg-identity tracking
+        and metrics without repeating pose estimation."""
+        from .pipeline import relabel_clip  # lazy: may pull in cv2
+
+        label = body.get("label")
+        sdir = self._session_dir(number)
+        sess = _load_session_json(sdir)
+        clip = sess.get("clips", {}).get(label)
+        if not clip or not clip.get("quality_json"):
+            raise RunFormError(f"Clip '{label}' has not been analyzed yet.")
+        current = bool((clip.get("leg_identity") or {}).get("swap_seed"))
+        # The button flips what the runner currently sees.
+        swap = (not current) if body.get("toggle") else bool(body.get("swap"))
+        result = relabel_clip(os.path.join(sdir, clip["quality_json"]), swap_seed=swap)
+        with _state_lock:
+            _invalidate_derived(sdir)
+        _record_result(sdir, label, result)
+        return {"ok": True, "quality_flags": result["quality_flags"]}
 
     def interpret(self, number):
         from .session import interpret_session
@@ -532,6 +570,7 @@ class Handler(BaseHTTPRequestHandler):
             actions = {
                 "update": lambda: self.api.update_session(number, body),
                 "analyze": lambda: self.api.start_analysis(number, body),
+                "seed": lambda: self.api.set_seed(number, body),
                 "interpret": lambda: self.api.interpret(number),
                 "narrate": lambda: self.api.narrate(number, body),
                 "plan": lambda: self.api.build_plan(number),

@@ -55,6 +55,12 @@ VIS_THRESHOLD = 0.5
 # plausible cadence/fps combination — refuse rather than emit junk.
 MIN_FRAMES = 20
 
+# Events this close (frames) to an unlabeled blind span from leg-identity
+# tracking are dropped for that side. Inside the span positions are gap
+# fill, not observation; at its edge, the join between real data and
+# fill can itself form a fake peak, and smoothing smears it a frame or two.
+GAP_EDGE_FRAMES = 2
+
 
 # ---------------------------------------------------------------------------
 # 1. Signal conditioning
@@ -268,11 +274,25 @@ def summarize(values):
     }
 
 
-def analyze(df, fps, direction, leg_len):
+def _drop_near_spans(frames, spans):
+    """Remove event frames inside or within GAP_EDGE_FRAMES of any span."""
+    if not spans or len(frames) == 0:
+        return frames
+    keep = np.ones(len(frames), dtype=bool)
+    for a, b in spans:
+        keep &= ~((frames >= a - GAP_EDGE_FRAMES) & (frames <= b + GAP_EDGE_FRAMES))
+    return frames[keep]
+
+
+def analyze(df, fps, direction, leg_len, exclude_spans=None):
     events = {}
     for side in ("left", "right"):
         strikes, toeoffs = detect_events(df, side, direction, fps, leg_len)
-        events[side] = {"strikes": strikes, "toeoffs": toeoffs}
+        spans = (exclude_spans or {}).get(side)
+        events[side] = {
+            "strikes": _drop_near_spans(strikes, spans),
+            "toeoffs": _drop_near_spans(toeoffs, spans),
+        }
 
     results = {}
     duration_s = len(df) / fps
@@ -398,12 +418,16 @@ def analyze(df, fps, direction, leg_len):
     return results
 
 
-def compute_metrics(csv_path, fps, width, height, smooth=9):
+def compute_metrics(csv_path, fps, width, height, smooth=9, exclude_spans=None):
     """The importable entry point: landmarks CSV -> metrics dict.
 
     Raises MetricsError on anything that would make the numbers junk
     (missing columns, too few frames, no usable body scale) rather than
     emitting metrics silently derived from degraded tracking.
+
+    exclude_spans: {"left": [[start, end], ...], "right": [...]} blind
+    spans from leg-identity tracking (runform.leg_identity); gait events
+    in or next to them are dropped for that side.
     """
     aspect = width / height
     df = load_and_condition(csv_path, aspect, smooth)
@@ -420,7 +444,7 @@ def compute_metrics(csv_path, fps, width, height, smooth=9):
             "Could not establish body scale — check pose detection quality."
         )
 
-    results = analyze(df, fps, direction, leg_len)
+    results = analyze(df, fps, direction, leg_len, exclude_spans=exclude_spans)
     results["_meta"] = {
         "frames": len(df),
         "duration_s": round(len(df) / fps, 2),

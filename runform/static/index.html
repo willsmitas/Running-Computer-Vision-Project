@@ -511,6 +511,7 @@ function clipPane(s, band, unit) {
     if (c.skeleton_url)
       html += `<div class="row" style="margin-top:8px">
         <button class="ghost" id="sync-play">▶ Play both in sync</button></div>`;
+    if (c.metrics && !job) html += seedPane(c);
 
     if (job) {
       const pct = job.progress != null ? Math.round(job.progress * 100) : null;
@@ -539,6 +540,41 @@ function clipPane(s, band, unit) {
 
   if (c.metrics) html += metricsPane(c);
   return html;
+}
+
+/* Leg identity: the runner confirms which foot is which on one frame
+   where the legs are clearly apart; tracking carries it through the
+   clip. Red = LEFT, blue = RIGHT (same colors as the overlay). */
+function seedPane(c) {
+  const li = c.leg_identity || {};
+  if (!c.seed_url) {
+    return `<div style="margin-top:16px"><h3>Leg identity</h3>
+      <p class="hint">No frame had both legs clearly visible and apart, so
+      left/right could not be anchored. Per-side metrics are not trustworthy
+      for this clip — re-film with both legs well lit.</p></div>`;
+  }
+  const cov = li.labeled_fraction || {};
+  return `<div style="margin-top:16px"><h3>Leg identity — check the dots</h3>
+    <div class="row" style="align-items:flex-start;gap:16px">
+      <img src="${c.seed_url}" alt="seed frame with red and blue foot dots"
+           style="max-width:320px;width:100%;border-radius:8px">
+      <div style="flex:1;min-width:200px">
+        <p>The <b style="color:#d33">red dot</b> should be on your
+        <b>left</b> foot and the <b style="color:#26c">blue dot</b> on your
+        <b>right</b>. Tracking follows each foot from this frame through the
+        whole clip, so this one check sets every left/right number.</p>
+        <div class="row">
+          <button class="ghost" id="seed-ok">Correct</button>
+          <button id="seed-swap">Swap red and blue</button>
+        </div>
+        <div class="err" id="seed-err"></div>
+        <p class="hint">Frame ${esc(li.seed_frame)} ·
+          ${esc(li.swaps_corrected ?? 0)} model label swaps corrected ·
+          feet labeled on ${fmt((cov.left ?? 0) * 100, 0)}% (L) /
+          ${fmt((cov.right ?? 0) * 100, 0)}% (R) of frames. A foot is left
+          unlabeled while it can't be seen, never guessed.</p>
+      </div>
+    </div></div>`;
 }
 
 function metricsPane(c) {
@@ -768,6 +804,21 @@ function wireSession(s, unit) {
       await post(`/api/sessions/${s.number}/analyze`, { label: activeBand });
       await refresh();
     } catch (e) { $("#clip-err").textContent = e.message; }
+  };
+
+  const seedOk = $("#seed-ok");
+  if (seedOk) seedOk.onclick = () => {
+    $("#seed-err").style.color = "var(--good-text)";
+    $("#seed-err").textContent = "confirmed";
+  };
+  const seedSwap = $("#seed-swap");
+  if (seedSwap) seedSwap.onclick = async () => {
+    seedSwap.disabled = true;
+    $("#seed-err").textContent = "re-tracking…";
+    try {
+      await post(`/api/sessions/${s.number}/seed`, { label: activeBand, toggle: true });
+      await refresh();
+    } catch (e) { $("#seed-err").textContent = e.message; seedSwap.disabled = false; }
   };
 
   const sync = $("#sync-play");

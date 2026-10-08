@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from rtmlib import Wholebody
+import pandas as pd
 
 from .errors import VideoError
 from .landmarks import LANDMARK_NAMES, POSE_CONNECTIONS
@@ -177,16 +177,115 @@ def _connection_color(start_idx, end_idx):
 
 
 def draw_landmarks(frame, landmarks, width, height):
+    """Draw one frame's skeleton. Joints with NaN coordinates (a leg left
+    unlabeled by leg-identity tracking) are skipped, bones touching them
+    too, so a blind span shows as a missing leg rather than a guess."""
     points = []
     for name, lm in zip(LANDMARK_NAMES, landmarks):
+        if not (np.isfinite(lm.x) and np.isfinite(lm.y)):
+            points.append(None)
+            continue
         x, y = int(lm.x * width), int(lm.y * height)
         points.append((x, y))
         cv2.circle(frame, (x, y), 4, _joint_color(name), -1)
 
     for start_idx, end_idx in POSE_CONNECTIONS:
         if start_idx < len(points) and end_idx < len(points):
+            a, b = points[start_idx], points[end_idx]
+            if a is None or b is None:
+                continue
             color = _connection_color(start_idx, end_idx)
-            cv2.line(frame, points[start_idx], points[end_idx], color, 2)
+            cv2.line(frame, a, b, color, 2)
+
+
+def _open_writer(path, fps, width, height):
+    """H.264 ("avc1") first: browsers can decode it, so the skeleton video
+    is directly playable in the web UI. mp4v as fallback for machines with
+    no H.264 encoder (plays in desktop players, not in <video>). Returns
+    None if neither opens."""
+    for fourcc_code in ("avc1", "mp4v"):
+        writer = cv2.VideoWriter(path, cv2.VideoWriter_fourcc(*fourcc_code), fps, (width, height))
+        if writer.isOpened():
+            return writer
+    return None
+
+
+def _csv_landmarks(row):
+    """One landmarks-CSV row -> list of _Point in scheme order, or None
+    for a frame with no detection."""
+    xs = [row.get(f"{n}_x") for n in LANDMARK_NAMES]
+    if all(x is None or not np.isfinite(x) for x in xs):
+        return None
+    return [
+        _Point(
+            x=float(row.get(f"{n}_x", np.nan)), y=float(row.get(f"{n}_y", np.nan)),
+            z=0.0, visibility=float(row.get(f"{n}_vis", 0.0)),
+        )
+        for n in LANDMARK_NAMES
+    ]
+
+
+def render_overlay(video_path, landmarks_csv_path, out_video_path):
+    """Re-render the skeleton overlay from a landmarks CSV (e.g. the
+    leg-identity tracked one), so the colors the runner sees are the
+    labels the metrics actually used. No pose model involved."""
+    df = pd.read_csv(landmarks_csv_path)
+    rows = df.to_dict("records")
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        raise VideoError(f"Could not open video: {video_path}")
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    tmp_path = out_video_path + ".tmp.mp4"
+    writer = _open_writer(tmp_path, fps, width, height)
+    if writer is None:
+        cap.release()
+        raise VideoError(f"Could not open a video writer for: {out_video_path}")
+    try:
+        i = 0
+        while True:
+            ok, frame = cap.read()
+            if not ok:
+                break
+            if i < len(rows):
+                lms = _csv_landmarks(rows[i])
+                if lms is not None:
+                    draw_landmarks(frame, lms, width, height)
+            writer.write(frame)
+            i += 1
+    finally:
+        cap.release()
+        writer.release()
+    os.replace(tmp_path, out_video_path)
+    return out_video_path
+
+
+def render_seed_frame(video_path, landmarks_csv_path, frame_idx, out_jpg_path):
+    """Save the seed frame with the skeleton drawn and a large red dot on
+    the foot currently labeled LEFT and a blue dot on RIGHT, for the
+    runner to confirm or swap in the UI."""
+    df = pd.read_csv(landmarks_csv_path)
+    cap = cv2.VideoCapture(video_path)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, int(frame_idx))
+    ok, frame = cap.read()
+    cap.release()
+    if not ok:
+        raise VideoError(f"Could not read frame {frame_idx} of {video_path}")
+    h, w = frame.shape[:2]
+    lms = _csv_landmarks(df.iloc[int(frame_idx)].to_dict())
+    if lms is not None:
+        draw_landmarks(frame, lms, w, h)
+    row = df.iloc[int(frame_idx)]
+    for side, color in (("left", COLOR_LEFT_LEG), ("right", COLOR_RIGHT_LEG)):
+        x, y = row[f"{side}_ankle_x"], row[f"{side}_ankle_y"]
+        if np.isfinite(x) and np.isfinite(y):
+            r = max(8, w // 60)
+            cv2.circle(frame, (int(x * w), int(y * h)), r, color, -1)
+            cv2.circle(frame, (int(x * w), int(y * h)), r, (255, 255, 255), 2)
+    if not cv2.imwrite(out_jpg_path, frame):
+        raise VideoError(f"Could not write {out_jpg_path}")
+    return out_jpg_path
 
 
 @dataclass
@@ -241,6 +340,10 @@ def extract_pose(
     if mode not in RTM_MODES:
         raise ValueError(f"Unknown mode '{mode}'. Options: {', '.join(RTM_MODES)}")
 
+    # Lazy: only extraction needs the model; overlay re-rendering
+    # (render_overlay / render_seed_frame) runs on cv2 alone.
+    from rtmlib import Wholebody
+
     cap = cv2.VideoCapture(input_path)
     if not cap.isOpened():
         raise VideoError(f"Could not open video: {input_path}")
@@ -258,17 +361,8 @@ def extract_pose(
     out_video_path = os.path.join(dest, stem + "_skeleton.mp4")
     out_csv_path = os.path.join(dest, stem + "_landmarks.csv")
 
-    # H.264 ("avc1") first: browsers can decode it, so the skeleton video
-    # is directly playable in the web UI. mp4v as fallback for machines
-    # with no H.264 encoder (plays in desktop players, not in <video>).
-    writer = None
-    for fourcc_code in ("avc1", "mp4v"):
-        writer = cv2.VideoWriter(
-            out_video_path, cv2.VideoWriter_fourcc(*fourcc_code), fps, (width, height)
-        )
-        if writer.isOpened():
-            break
-    if writer is None or not writer.isOpened():
+    writer = _open_writer(out_video_path, fps, width, height)
+    if writer is None:
         cap.release()
         raise VideoError(f"Could not open a video writer for: {out_video_path}")
 

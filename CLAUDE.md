@@ -25,6 +25,9 @@ Full plan in `BUILD_PLAN.md`. Read it before proposing architecture changes.
     truth for the index-order invariant below.
   - `pose.py` — video → skeleton overlay + landmarks CSV. Only module
     that imports rtmlib/cv2.
+  - `leg_identity.py` — raw landmarks CSV → tracked CSV. Carries
+    left/right leg identity from a seed frame by motion continuity,
+    repairing front/rear label swaps; blind spans stay unlabeled.
   - `metrics.py` — landmarks CSV → metrics JSON. Gait events, joint
     angles, cadence, contact time, overstride, asymmetry.
   - `pipeline.py` — Phase 1: video → all artifacts + quality flags.

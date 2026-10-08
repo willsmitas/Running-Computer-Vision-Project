@@ -62,12 +62,15 @@ def _grade_summary(metric, summary):
     return "high" if n >= MIN_N_HIGH else "low"
 
 
-def grade_clip_metrics(metrics, detection_rate=None):
+def grade_clip_metrics(metrics, detection_rate=None, quality_flags=None):
     """Grade every metric in one clip's metrics dict.
 
     Returns {grade_key: grade}. Keys follow grade_key(): scalars by name,
     per-side as "left.metric"/"right.metric", asymmetry as
     "asymmetry_pct.submetric".
+
+    quality_flags (from runform.pipeline) can only demote grades, never
+    raise them.
     """
     grades = {}
 
@@ -98,5 +101,23 @@ def grade_clip_metrics(metrics, detection_rate=None):
 
     if detection_rate is not None and detection_rate < MIN_DETECTION_RATE:
         grades = {k: ("low" if g == "high" else g) for k, g in grades.items()}
+
+    flags = set(quality_flags or ())
+    for k in grades:
+        per_side = k.startswith(("left.", "right."))
+        asym = k.startswith("asymmetry_pct.")
+        if "leg_labels_stuck" in flags and (per_side or asym):
+            # Labels track front/rear roles, not legs: per-side numbers
+            # are front-vs-rear geometry and asymmetry is fiction.
+            grades[k] = "unusable"
+        elif "leg_identity_gaps" in flags:
+            if asym:
+                grades[k] = "unusable"
+            elif per_side and grades[k] == "high":
+                grades[k] = "low"
+    if "implausible_cadence" in flags:
+        # A physically impossible cadence means the strike train itself
+        # is corrupt; everything timed off it goes with it.
+        grades["cadence_spm"] = "unusable"
 
     return grades
