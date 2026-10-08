@@ -4,6 +4,7 @@ Commands mirror the build phases so each layer stays exercisable from
 the terminal long before any UI exists (Phase 6 is deliberately last):
 
     analyze    Phase 1  video -> skeleton video, landmarks CSV, metrics, quality
+    relabel    Phase 1  re-run leg-identity tracking with the seed swapped (no pose rerun)
     interpret  Phase 2  1-3 clip metrics + speeds -> deterministic assessment
     narrate    Phase 3  assessment -> LLM narrative (local Ollama)
     plan       Phase 4  assessment -> drill plan with success criteria
@@ -40,7 +41,19 @@ def cmd_analyze(args):
     result = analyze_clip(
         args.video, out_dir=args.out_dir,
         mode=args.mode, device=args.device, smooth=args.smooth,
+        swap_seed=args.swap_seed,
     )
+    _print_analysis(result)
+
+
+def cmd_relabel(args):
+    from .pipeline import relabel_clip
+
+    _print_analysis(relabel_clip(args.quality_json, swap_seed=args.swap_seed,
+                                 smooth=args.smooth))
+
+
+def _print_analysis(result):
     print(f"Frames:            {result['frames']} ({result['duration_s']} s @ {result['fps']:.6g} fps)")
     print(f"Detection rate:    {result['detection_rate']:.1%}")
     kv = result["key_joint_visibility"]
@@ -53,9 +66,24 @@ def cmd_analyze(args):
             f"right {kv['right']['min']} (worst joint)"
         )
     print(f"Steps detected:    {result['metrics'].get('steps_detected')}")
+    ident = result["leg_identity"]
+    if ident["seed_frame"] is None:
+        print("Leg identity:      no seed frame (legs never clearly visible and apart)")
+    else:
+        cov = ident["labeled_fraction"]
+        print(
+            f"Leg identity:      seed frame {ident['seed_frame']}"
+            f"{' (swapped)' if ident['swap_seed'] else ''}, "
+            f"{ident['swaps_corrected']} label swaps corrected, "
+            f"labeled L {cov['left']:.0%} / R {cov['right']:.0%}"
+        )
     print(f"Quality flags:     {result['quality_flags'] or 'none'}")
     print(f"Skeleton video:    {result['skeleton_video_path']}")
     print(f"Landmarks CSV:     {result['landmarks_csv_path']}")
+    print(f"Tracked CSV:       {result['tracked_landmarks_csv_path']}")
+    if result.get("seed_image_path"):
+        print(f"Seed frame image:  {result['seed_image_path']}  "
+              f"(red dot = LEFT; if wrong, run: relabel <quality json> --swap-seed)")
     print(f"Metrics JSON:      {result['metrics_json_path']}")
     print(f"Quality JSON:      {result['quality_json_path']}")
 
@@ -137,7 +165,16 @@ def build_parser():
     a.add_argument("--device", default="cpu", choices=("cpu", "cuda", "mps"),
                    help="onnxruntime execution device (default: cpu)")
     a.add_argument("--smooth", type=int, default=9)
+    a.add_argument("--swap-seed", action="store_true",
+                   help="the model's left/right labels on the seed frame are backwards")
     a.set_defaults(func=cmd_analyze)
+
+    r = sub.add_parser("relabel", help="re-run leg-identity tracking + metrics on an analyzed clip")
+    r.add_argument("quality_json", help="the <clip>_quality.json written by analyze")
+    r.add_argument("--swap-seed", action="store_true",
+                   help="red dot on the seed frame image is on the RIGHT foot")
+    r.add_argument("--smooth", type=int, default=9)
+    r.set_defaults(func=cmd_relabel)
 
     i = sub.add_parser("interpret", help="clip metrics + speeds -> deterministic assessment")
     i.add_argument(

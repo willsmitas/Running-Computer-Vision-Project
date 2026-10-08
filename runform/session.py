@@ -70,7 +70,9 @@ def interpret_session(clips, notes=""):
         detection_rate = clip.get("detection_rate")
         metrics_by_clip[band] = metrics
 
-        grades = gating.grade_clip_metrics(metrics, detection_rate)
+        grades = gating.grade_clip_metrics(
+            metrics, detection_rate, quality_flags=clip.get("quality_flags"),
+        )
 
         for dev in references.clip_deviations(metrics, band):
             key = gating.grade_key(dev["metric"], dev["side"], dev["submetric"])

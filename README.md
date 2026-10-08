@@ -28,6 +28,7 @@ One command per build phase, all via the package CLI:
 
 ```
 python -m runform analyze clip.mp4                  # video -> skeleton video, landmarks CSV, metrics + quality report
+python -m runform relabel clip_quality.json --swap-seed   # red dot on the seed-frame image is on the wrong foot
 python -m runform interpret --clip easy_metrics.json easy 2.6 ^
                             --clip mod_metrics.json moderate 3.3 ^
                             --clip fast_metrics.json fast 4.1 ^
@@ -59,6 +60,12 @@ python -m unittest discover -s tests -t .
 ## Status
 
 - Phases 1–5 are scaffolded and unit-tested against synthetic data.
+- **Leg-identity tracking** (`runform/leg_identity.py`) repairs
+  left/right swaps at limb crossover: identity is seeded on one frame
+  (`<clip>_seed.jpg`, red dot = left; confirm or swap in the UI), carried
+  by motion continuity, and never guessed while a foot is hidden. Metrics
+  are computed from `<clip>_landmarks_tracked.csv`; the raw CSV is kept.
+  Synthetic-validated only so far.
 - **Phase 0 (validation on real treadmill clips) has been run — partial
   pass, blocked on footage.** Full results in `scripts/phase0_validation.md`.
   Manual ground-truth strike counts match `steps_detected` exactly on 2 of

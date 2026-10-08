@@ -202,10 +202,17 @@ shows it holding identity perfectly (40/40 sign balance, cadence within
 though its contact-time calibration needs separate validation.
 **Update, same day: (2) is resolved — the pose backend was swapped to
 RTMPose (rtmlib Wholebody) and MediaPipe removed from the codebase.**
-(1), the automated swap flag, remains open and is still worth adding:
-the failure class is backend-agnostic. RTMPose's event-timing
+(1), the automated swap flag, is now implemented (2026-10) and goes
+further than flagging: `runform/leg_identity.py` seeds left/right on a
+frame where the legs are clearly apart (runner confirms or swaps it in
+the UI), carries identity through each crossover by motion continuity,
+and leaves a foot unlabeled while it cannot be seen rather than
+guessing. Quality flags `leg_labels_stuck` (post-tracking sign test),
+`leg_identity_gaps`, and `implausible_cadence` feed gating. Validated on
+synthetic swaps only; **must be re-checked on the british_guy clip and
+new footage** before the gate is cleared. RTMPose's event-timing
 calibration (ground-contact times read ~100 ms longer than MediaPipe's
-on comparable footage) also needs validation against ground truth.
+on comparable footage) also still needs validation against ground truth.
 
 ### Phase 1 — Pipeline orchestration
 
